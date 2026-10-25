@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 // (BD, cookies, tiempo real) y la arquitectura asume el modelo de caché clásico.
 const nextConfig: NextConfig = {
   turbopack: {
+    // Fija la raíz al proyecto: evita que Next tome un package-lock.json de una carpeta superior.
+    root: __dirname,
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
