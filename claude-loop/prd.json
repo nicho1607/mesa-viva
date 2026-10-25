@@ -1,0 +1,254 @@
+{
+  "project": "Mesa Viva",
+  "branchName": "feat/mvp-menu-pedidos",
+  "description": "MVP de menú virtual por QR y gestión de pedidos en tiempo real para restaurantes. Arquitectura completa en docs/ARQUITECTURA.md (leerla antes de cada historia).",
+  "userStories": [
+    {
+      "id": "MV-001",
+      "title": "Scaffold Next.js 15 + TypeScript + Tailwind v4 + Vitest",
+      "description": "Como desarrollador, necesito el proyecto base con todas las dependencias instaladas para que las demás historias no toquen el lockfile.",
+      "acceptanceCriteria": [
+        "Next.js 15 App Router con TypeScript strict en la raíz del repo",
+        "Tailwind v4 con los tokens de color y fuentes de docs/ARQUITECTURA.md sección 6 en globals.css",
+        "Dependencias instaladas: prisma, @prisma/client (si Prisma 7: @prisma/adapter-pg + prisma.config.ts), pg, @types/pg, zod, bcryptjs, jose, @tanstack/react-query, qrcode, vitest, @playwright/test",
+        "Scripts npm: dev, build, typecheck (tsc --noEmit), test (vitest run)",
+        ".env (gitignored) con DATABASE_URL de PostgreSQL local y SESSION_SECRET aleatorio; .env.example sin secretos",
+        "Estructura de carpetas de docs/ARQUITECTURA.md sección 4",
+        "AGENTS.md en la raíz con convenciones (dinero en centavos, lógica en src/lib/domain)",
+        "Typecheck y test pasan"
+      ],
+      "dependsOn": [],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-002",
+      "title": "Esquema Prisma, migración con índice único parcial y seed",
+      "description": "Como desarrollador, necesito el modelo de datos completo para persistir mesas, menú, órdenes y cuentas.",
+      "acceptanceCriteria": [
+        "prisma/schema.prisma igual al de docs/ARQUITECTURA.md sección 2 (User.passwordHash en vez de authId)",
+        "Migración incluye SQL: CREATE UNIQUE INDEX one_open_order_per_table ON \"Order\"(\"tableId\") WHERE status = 'OPEN'",
+        "src/lib/db.ts con PrismaClient singleton",
+        "prisma/seed.ts crea 4 categorías (Entradas, Platos fuertes, Bebidas, Postres) con 4+ productos realistas cada una, 2 zonas, 8 mesas con publicToken aleatorio de 24+ caracteres, 2 meseros y 1 admin, settings taxRate y tipRate",
+        "Migración aplicada a la BD local (prisma migrate dev), seed ejecutado (contraseñas bcrypt; credenciales demo documentadas en README); typecheck pasa"
+      ],
+      "dependsOn": [
+        "MV-001"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "BD local PostgreSQL 18 en localhost:5432, base restaurante_sistema (vacía). DATABASE_URL en .env."
+    },
+    {
+      "id": "MV-003",
+      "title": "Lógica de dominio pura: computeBill, deriveCustomerStatus, formatMoney",
+      "description": "Como desarrollador, necesito funciones puras y testeadas para calcular la cuenta y el estado visible al cliente.",
+      "acceptanceCriteria": [
+        "src/lib/domain/billing.ts: computeBill excluye ítems CANCELLED, redondea a centavos, soporta pricesIncludeTax",
+        "src/lib/domain/order-status.ts: deriveCustomerStatus devuelve IN_PREPARATION | SERVED | CLOSED según la tabla de la sección 3",
+        "src/lib/money.ts: formatMoney(centavos) con Intl.NumberFormat configurable",
+        "Tests Vitest con casos: vacía, con cancelados, impuesto incluido y no incluido, redondeo",
+        "Typecheck y test pasan"
+      ],
+      "dependsOn": [
+        "MV-001"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-004",
+      "title": "addItemsToOrder y closeOrder transaccionales",
+      "description": "Como sistema, necesito añadir rondas a la orden abierta de una mesa y cerrar el servicio sin condiciones de carrera.",
+      "acceptanceCriteria": [
+        "src/lib/domain/orders.ts implementa addItemsToOrder según la sección 5.1 (precios desde BD, SELECT FOR UPDATE, reintento P2002, rondas)",
+        "closeOrder(orderId, staffUserId, tipRate?) bloquea la orden, crea Bill con snapshot de líneas usando computeBill, pone orden CLOSED y mesa AVAILABLE",
+        "addItemsToOrder sobre orden cerrada lanza OrderClosedError; producto no disponible lanza UnavailableProductsError con los ids",
+        "Funciones de mesero: confirmRound(orderId, round), setItemStatus(itemId, status), cancelItem(itemId)",
+        "Cada mutación incrementa Order.version",
+        "Tests de integración (si hay BD de test) o tests con lógica extraída; typecheck pasa"
+      ],
+      "dependsOn": [
+        "MV-002",
+        "MV-003"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-005",
+      "title": "Capa de tiempo real: pg_notify + bus LISTEN + endpoint SSE + hook cliente",
+      "description": "Como sistema, necesito emitir señales tras cada mutación y entregarlas por SSE a clientes autorizados.",
+      "acceptanceCriteria": [
+        "publish.ts, bus.ts, api/events/route.ts y use-channel.ts según docs/ARQUITECTURA.md sección 5.3",
+        "/api/events autoriza: ?table=<publicToken> válido → table:{id}; sesión mesero → waiter:{userId}; admin → staff:floor; si no, 401",
+        "Payloads solo con orderId, version, tableNumber, round (sin precios ni ítems)",
+        "publish no lanza si falla; el hook expone connected para mostrar 'Reconectando…'",
+        "Test: un publish llega a un suscriptor del bus (contra la BD local)",
+        "Typecheck y test pasan"
+      ],
+      "dependsOn": [
+        "MV-002",
+        "MV-009"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-006",
+      "title": "Server Actions del cliente conectadas a dominio y tiempo real",
+      "description": "Como cliente, necesito endpoints seguros para ver el menú, pedir, ver mi cuenta y llamar al mesero usando solo el token del QR.",
+      "acceptanceCriteria": [
+        "src/app/actions/order.actions.ts: getMenu(), submitOrder(token, items), getTableBill(token), callWaiter(token)",
+        "submitOrder llama a addItemsToOrder y luego publica en table:{id} y waiter:{waiterId} (o staff:floor si no hay mesero)",
+        "getTableBill devuelve ítems agrupados por ronda, totales vía computeBill y customerStatus",
+        "Errores se devuelven como resultado tipado con mensaje para el usuario, no como excepción",
+        "Rate limit simple en memoria por token (10 envíos/min)",
+        "Typecheck y test pasan"
+      ],
+      "dependsOn": [
+        "MV-004",
+        "MV-005"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-007",
+      "title": "UI cliente: menú por categorías con notas y carrito",
+      "description": "Como cliente en mi mesa, quiero explorar el menú, añadir platos con observaciones y enviar mi pedido.",
+      "acceptanceCriteria": [
+        "Ruta /m/[token]; token inválido muestra 'Este código no es válido, pide ayuda al mesero'",
+        "Pestañas de categoría pegajosas; productos agotados visibles pero deshabilitados",
+        "Hoja de plato con cantidad y campo de nota (máx. 200, sugerencias: Sin cebolla, Término medio, Salsa aparte)",
+        "Carrito local persistido por mesa en localStorage con try/catch",
+        "Barra inferior 'Ver pedido (n) · total'; botón 'Enviar pedido' con confirmación de éxito 'Pedido enviado'",
+        "Dirección visual de la sección 6 (porcelana, tinta, Bricolage Grotesque + Atkinson Hyperlegible)",
+        "Responsive desde 360px, objetivos táctiles ≥ 44px, foco visible",
+        "Typecheck pasa; verificar en navegador"
+      ],
+      "dependsOn": [
+        "MV-006"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-008",
+      "title": "UI cliente: cuenta en vivo y estado del pedido",
+      "description": "Como cliente, quiero ver lo que llevamos consumido y el estado del pedido actualizándose solo.",
+      "acceptanceCriteria": [
+        "Ruta /m/[token]/cuenta con LiveBill (sección 5.4) en formato comanda/ticket agrupado por ronda",
+        "Subtotal, impuestos, propina sugerida y total con cifras tabulares",
+        "Estado: En preparación / Servido / Servicio finalizado",
+        "Se actualiza al recibir evento sin recargar; animación de entrada de ronda nueva desactivada con prefers-reduced-motion",
+        "Botón 'Llamar al mesero' y 'Pedir la cuenta'",
+        "Tras cierre muestra la cuenta definitiva y deshabilita pedir",
+        "Typecheck pasa; verificar en navegador"
+      ],
+      "dependsOn": [
+        "MV-006"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-009",
+      "title": "Login de personal y protección de /staff",
+      "description": "Como mesero o admin, necesito iniciar sesión para acceder solo a mis vistas.",
+      "acceptanceCriteria": [
+        "Página /staff/login con email + contraseña (bcryptjs)",
+        "Sesión en cookie httpOnly, secure en prod, sameSite=lax, firmada con jose (SESSION_SECRET), expira en 12h",
+        "middleware.ts protege /staff/* excepto login; logout borra la cookie",
+        "src/lib/auth.ts: getSession() y requireStaff(role?) usados en toda acción de staff",
+        "Mensaje 'Email o contraseña incorrectos' sin revelar cuál falló",
+        "Tests de firma/verificación de sesión; typecheck pasa"
+      ],
+      "dependsOn": [
+        "MV-002"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-010",
+      "title": "Dashboard mesero: plano de mesas con alertas en tiempo real",
+      "description": "Como mesero, quiero ver mis mesas y recibir una alerta en cuanto una pida o me llame.",
+      "acceptanceCriteria": [
+        "/staff muestra cuadrícula de mesas asignadas (por zona o asignación directa); admin ve todas",
+        "Color de borde por estado: ronda sin confirmar, te llaman, ocupada, libre (sección 6)",
+        "Suscripción a waiter:{userId}: toast 'Mesa 7 · Ronda 3', sonido opcional, badge en la mesa",
+        "Typecheck pasa; verificar en navegador"
+      ],
+      "dependsOn": [
+        "MV-006",
+        "MV-009"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-011",
+      "title": "Detalle de mesa: confirmar rondas, marcar servido y finalizar servicio",
+      "description": "Como mesero, quiero gestionar la orden de una mesa y cerrar la cuenta al terminar.",
+      "acceptanceCriteria": [
+        "/staff/mesas/[id] lista rondas con notas destacadas; botones 'Confirmar ronda', 'Servido' por ítem y por ronda, 'Cancelar ítem'",
+        "El mesero puede añadir ítems en nombre del cliente (reusa addItemsToOrder)",
+        "Botón 'Finalizar servicio' abre diálogo con resumen, propina editable y advertencia si hay ítems sin servir",
+        "Al cerrar se crea la Bill, se notifica table:{id} y la vista muestra la cuenta lista para caja",
+        "Typecheck pasa; verificar en navegador"
+      ],
+      "dependsOn": [
+        "MV-010"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-012",
+      "title": "Admin: menú, mesas, asignaciones y QR",
+      "description": "Como admin, quiero gestionar productos, mesas y meseros, e imprimir los QR.",
+      "acceptanceCriteria": [
+        "CRUD de categorías y productos (precio en centavos, disponible/agotado)",
+        "CRUD de zonas y mesas; asignar mesero a zona o a mesa",
+        "Rotar publicToken de una mesa",
+        "/api/qr/[tableId] devuelve PNG con la URL /m/{publicToken}; página imprimible con todos los QR",
+        "Solo rol ADMIN; typecheck pasa; verificar en navegador"
+      ],
+      "dependsOn": [
+        "MV-009"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "MV-013",
+      "title": "Prueba E2E del flujo completo",
+      "description": "Como equipo, queremos una prueba que cubra escanear, pedir, añadir ronda, servir y cerrar.",
+      "acceptanceCriteria": [
+        "Playwright con dos contextos (cliente y mesero): cliente pide, mesero recibe alerta y confirma, cliente añade ronda 2, mesero marca servido y finaliza servicio, cliente ve 'Servicio finalizado' con total correcto",
+        "Prueba de concurrencia: dos clientes envían a la vez a una mesa sin orden y queda una sola orden abierta",
+        "Pruebas pasan contra la BD de seed"
+      ],
+      "dependsOn": [
+        "MV-007",
+        "MV-008",
+        "MV-011"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
