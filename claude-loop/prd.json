@@ -37,7 +37,7 @@
         "MV-001"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "BD local PostgreSQL 18 en localhost:5432, base restaurante_sistema (vacía). DATABASE_URL en .env."
     },
     {

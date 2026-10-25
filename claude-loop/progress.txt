@@ -5,6 +5,9 @@
 - Prisma 7: `prisma.config.ts` en la raíz (dotenv/config + env("DATABASE_URL")); usar `@prisma/adapter-pg`. `/src/generated/` ya está en .gitignore por si el generador escribe ahí.
 - Tests Vitest en `tests/**/*.test.ts` (o `src/**/*.test.ts`); alias `@/` vía vite-tsconfig-paths.
 - Tokens Tailwind: `bg-plato text-tinta text-tinta-suave azafran albahaca guindilla`, `font-display` (Bricolage) / `font-sans` (Atkinson).
+- Prisma client: `import { db } from "@/lib/db"`; tipos/enums desde `@/generated/prisma/client`. Tras cambiar el schema: `npx prisma generate` (v7 `migrate dev` no genera ni siembra). SQL custom: `migrate dev --create-only` + editar + `migrate dev`.
+- BD demo: `npm run db:seed` (idempotente). Usuarios: admin@mesaviva.co / admin123; laura@mesaviva.co y andres@mesaviva.co / mesero123. Mesas 1-4 "Salón principal" (Laura), 5-8 "Terraza" (Andrés).
+- psql: `"/c/Program Files/PostgreSQL/18/bin/psql" "<DATABASE_URL sin ?schema=public>"` (psql rechaza el parámetro `schema`).
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -16,4 +19,15 @@
   - Template de Next 16 usa `@tailwindcss/turbopack` como loader en next.config.ts (no postcss.config).
   - `tsx` no está instalado; MV-002 debe añadirlo si el seed lo usa (y configurar migrations.seed en prisma.config.ts).
   - Verificado: typecheck, test, lint, build y dev server (curl /) OK.
+---
+
+## 2026-10-25 16:35 - MV-002
+- schema.prisma según la doc (sección 2) con generador `prisma-client` -> src/generated/prisma y datasource sin url; migración init + índice único parcial one_open_order_per_table (verificado en pg_indexes); src/lib/db.ts singleton PrismaPg; prisma/seed.ts idempotente (4 categorías / 19 productos en centavos COP, 2 zonas con mesero, 8 mesas con token de 24 chars, 2 meseros + admin con bcrypt, 5 settings); tsx + migrations.seed; scripts db:*; postinstall prisma generate; README con credenciales demo.
+- Files: prisma/schema.prisma, prisma/migrations/20261025212354_init/migration.sql, prisma/migrations/migration_lock.toml, prisma/seed.ts, prisma.config.ts, src/lib/db.ts, package.json, package-lock.json, eslint.config.mjs, README.md, AGENTS.md
+- **Learnings for future iterations:**
+  - Prisma 7: `migrate dev` no ejecuta generate ni seed; correr `prisma generate` y `prisma db seed` explícitamente.
+  - El seed importa el cliente por ruta relativa (../src/generated/prisma/client) y crea su propio PrismaClient con adapter.
+  - Product no tiene unique en name: el seed usa findFirst(name+categoryId) + update/create. Table se hace upsert por number sin tocar publicToken en update (los QR siguen valiendo tras re-seed).
+  - eslint ignora src/generated/**.
+  - Verificado: typecheck, test, lint, build; una ruta temporal que usaba db, bajo next start, devolvió {"mesas":8}.
 ---

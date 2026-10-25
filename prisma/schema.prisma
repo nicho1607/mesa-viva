@@ -1,0 +1,152 @@
+// Mesa Viva — modelo de datos (ver docs/ARQUITECTURA.md sección 2).
+// Prisma 7: la URL de conexión vive en prisma.config.ts y el cliente usa @prisma/adapter-pg.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  WAITER
+  ADMIN
+  CASHIER
+}
+
+enum OrderStatus {
+  OPEN // la mesa puede seguir pidiendo
+  CLOSED // servicio finalizado, cuenta generada
+  CANCELLED
+}
+
+enum ItemStatus {
+  PENDING // enviado, el mesero aún no lo confirma
+  IN_PREPARATION // confirmado, en cocina/barra
+  SERVED // entregado en la mesa
+  CANCELLED
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  NEEDS_ATTENTION // el cliente llamó al mesero
+  INACTIVE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  passwordHash String // bcrypt
+  name         String
+  email        String   @unique
+  role         Role     @default(WAITER)
+  active       Boolean  @default(true)
+  zones        Zone[]
+  tables       Table[]  @relation("DirectAssignment")
+  orders       Order[]  @relation("OrderWaiter")
+  closedBills  Bill[]
+  createdAt    DateTime @default(now())
+}
+
+model Zone {
+  id       String  @id @default(uuid())
+  name     String  @unique // "Terraza", "Salón principal"
+  waiterId String?
+  waiter   User?   @relation(fields: [waiterId], references: [id])
+  tables   Table[]
+}
+
+model Table {
+  id          String      @id @default(uuid())
+  number      Int         @unique
+  seats       Int         @default(4)
+  publicToken String      @unique // va en el QR: /m/{publicToken}
+  status      TableStatus @default(AVAILABLE)
+  zoneId      String
+  zone        Zone        @relation(fields: [zoneId], references: [id])
+  waiterId    String? // anula al mesero de la zona
+  waiter      User?       @relation("DirectAssignment", fields: [waiterId], references: [id])
+  orders      Order[]
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique // Entradas, Platos fuertes, Bebidas, Postres
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  price       Int // centavos
+  imageUrl    String?
+  available   Boolean     @default(true) // "agotado" sin borrarlo
+  sortOrder   Int         @default(0)
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+
+  @@index([categoryId, available])
+}
+
+model Order {
+  id        String      @id @default(uuid())
+  tableId   String
+  table     Table       @relation(fields: [tableId], references: [id])
+  waiterId  String? // resuelto al abrir: table.waiterId ?? zone.waiterId
+  waiter    User?       @relation("OrderWaiter", fields: [waiterId], references: [id])
+  status    OrderStatus @default(OPEN)
+  version   Int         @default(0) // se incrementa en cada cambio; viaja en los eventos
+  lastRound Int         @default(0)
+  items     OrderItem[]
+  bill      Bill?
+  openedAt  DateTime    @default(now())
+  closedAt  DateTime?
+  // Índice único parcial (en SQL de la migración):
+  // CREATE UNIQUE INDEX "one_open_order_per_table" ON "Order"("tableId") WHERE status = 'OPEN';
+
+  @@index([waiterId, status])
+}
+
+model OrderItem {
+  id          String     @id @default(uuid())
+  orderId     String
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id])
+  productName String // snapshot
+  unitPrice   Int // snapshot en centavos
+  quantity    Int
+  notes       String?    @db.VarChar(200) // "Sin cebolla", "Término medio"
+  round       Int // ronda en que se pidió
+  status      ItemStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  servedAt    DateTime?
+
+  @@index([orderId, round])
+}
+
+model Bill {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id])
+  subtotal   Int // suma de ítems no cancelados
+  taxRate    Decimal  @db.Decimal(5, 4) // ej. 0.1900 (snapshot de la config)
+  taxAmount  Int
+  tipRate    Decimal  @db.Decimal(5, 4) // ej. 0.1000 (propina sugerida)
+  tipAmount  Int
+  total      Int
+  lines      Json // snapshot de líneas agrupadas para imprimir
+  closedById String
+  closedBy   User     @relation(fields: [closedById], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Setting {
+  key   String @id // "taxRate", "tipRate", "currency", "restaurantName"
+  value String
+}
