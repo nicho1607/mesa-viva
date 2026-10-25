@@ -30,6 +30,7 @@ function describeIssue(issue: ZodError["issues"][number]): string {
     if (issue.code === "too_big") return "puedes enviar máximo 30 productos a la vez";
   }
   if (path[0] === "reason") return "el motivo no es válido";
+  if (path[0] === "tipRate") return "la propina debe estar entre 0 % y 100 %";
   return "hay datos no válidos";
 }
 

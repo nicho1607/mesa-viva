@@ -180,6 +180,19 @@ export async function confirmRound(orderId: string, round: number): Promise<Conf
   });
 }
 
+/** "Ronda servida": todos los ítems IN_PREPARATION de la ronda pasan a SERVED (con `servedAt`). */
+export async function serveRound(orderId: string, round: number): Promise<ConfirmRoundResult> {
+  return db.$transaction(async (tx) => {
+    const locked = await lockOpenOrder(tx, orderId);
+    const { count } = await tx.orderItem.updateMany({
+      where: { orderId, round, status: "IN_PREPARATION" },
+      data: { status: "SERVED", servedAt: new Date() },
+    });
+    const bumped = await bumpVersion(tx, locked.id);
+    return { ...bumped, round, count };
+  });
+}
+
 /**
  * Cambia el estado de un ítem respetando las transiciones válidas
  * (PENDING → IN_PREPARATION → SERVED; PENDING/IN_PREPARATION → CANCELLED).

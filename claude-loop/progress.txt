@@ -147,3 +147,19 @@
   - Datos de dev cambiados: el publicToken de la mesa 8 rotó (antes tHwSHq8zPsQJHB1qbt-AS1Mk); el producto de prueba se eliminó y la asignación de la mesa 8 quedó como estaba.
   - Checks: typecheck, lint, npm test (182), build.
 ---
+
+## 2026-10-25 18:05 - MV-011
+- Detalle de mesa /staff/mesas/[id]: cabecera "Mesa N" + zona, estado y puestos; banda guindilla "La mesa pide la cuenta / te llama" con "Atendido"; rondas de la más nueva a la más vieja como comandas (hora Bogotá, "Sin confirmar"/"En cocina", filete izquierdo azafrán si hay por confirmar), botón principal por ronda "Confirmar ronda" (tinta) o "Ronda servida" (albahaca); por ítem cantidad/nombre/precio, nota resaltada (bloque azafrán/15 con filete azafrán, negrita), estado con punto, "Servido" (solo en cocina) y "Cancelar" con confirmación en línea ("¿Cancelar este plato?" Sí, cancelar / No); cancelados tachados. Barra fija: subtotal en vivo + "Agregar productos" + "Finalizar servicio". Hoja "Agregar productos" (búsqueda sin tildes, chips de categoría, plato desplegable con cantidad + nota, ronda borrador con Quitar, "Enviar ronda (n) · $X"). Hoja "Finalizar servicio" (advertencia "Hay N productos sin servir", propina 0 % / 10 % / Otro % con validación, subtotal/IVA incluido/propina/total, "Finalizar y generar cuenta"). Tras cerrar: "Servicio finalizado. La mesa quedó libre." + cuenta para caja imprimible ("Imprimir cuenta", resto print:hidden). Andrés/otro mesero → "Esta mesa no está asignada a ti."
+- Permisos: decideTableAction (puro) + assertCanActOnTable; CASHIER ve y cierra, no gestiona. Dominio autorizado staff* + serveRound + getTableDetailForStaff.
+- Files: src/lib/domain/{permissions,staff-table}.ts, src/lib/domain/{orders,tables}.ts, src/lib/action-result.ts (mensaje tipRate), src/lib/table-view.ts, src/app/actions/table.actions.ts, src/app/staff/mesas/[id]/page.tsx, src/components/staff/{TableDetail,RoundTicket,AddItemsSheet,CloseServiceSheet,FinalBill}.tsx, tests/domain/table-view.test.ts, tests/integration/staff-table.test.ts, AGENTS.md
+- Plan de diseño: misma familia que la comanda del cliente pero callada (paneles blancos con filete fino, cabecera de ronda con filete discontinuo); lo único fuerte es la nota (bloque azafrán) y la acción principal de la ronda (botón grande). Sin animaciones nuevas.
+- **Learnings for future iterations:**
+  - useRealtimeInvalidate con keys [] para filtrar por payload en onEvent: el `ready` ya no refresca nada; invalidar en un effect cuando `connected` pasa a true.
+  - Cambiar el ancho del borde izquierdo entre estados desplaza el contenido: usar el mismo ancho y cambiar solo el color.
+  - Un contenedor con overflow-x-auto muestra barra en Chrome escritorio: `[scrollbar-width:none]` para las píldoras.
+  - Al filtrar dentro de una hoja inferior su altura salta: altura mínima (min-h-[55dvh]) en el contenido.
+  - Horas: Intl con timeZone fijo (America/Bogota) para que SSR e hidratación coincidan.
+  - Verificado en navegador (Laura, mesa 2): Confirmar ronda 1 → cliente "en cocina" en vivo; ronda 3 (Bandeja paisa "Sin cebolla") añadida por el mesero apareció en /m/<token>/cuenta sin recargar; Ronda 3 confirmada y servida; Patacones cancelado con confirmación en línea → tachado en ambas pantallas, subtotal $ 50.000; diálogo con 1 sin servir mostró la advertencia, "Otro 12,5" → $ 6.250; tras servir todo, cierre con 10 % → cuenta $ 55.000 (cliente: "Servicio finalizado", mismo total); plano: mesa 2 Libre. Andrés → mensaje "no está asignada a ti". 360 px (iframe): sin scroll horizontal, sin objetivos < 44 px. No se pulsó "Imprimir cuenta".
+  - Estado de dev: la orden de la mesa 2 quedó CERRADA (Bill $ 55.000, propina 10 %); después, para revisar el ancho móvil, se abrió una orden nueva en la mesa 2 con ronda 1 PENDING (Empanadas vallunas x1, nota "Salsa aparte").
+  - Checks: typecheck, lint, npm test (201), build (/staff/mesas/[id] = ƒ).
+---

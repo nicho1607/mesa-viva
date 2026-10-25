@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AttentionReason, TableStatus } from "@/generated/prisma/client";
 import { ForbiddenError, InvalidTableError, NotFoundError } from "@/lib/domain/errors";
+import { isResponsibleWaiter } from "@/lib/domain/permissions";
 
 export const callWaiterInput = z.object({
   token: z.string().min(1).max(128),
@@ -103,7 +104,8 @@ export async function acknowledgeTable(
     const open = table.orders[0];
     const assigned = table.waiterId ?? table.zone.waiterId ?? null;
     const responsible = open?.waiterId ?? assigned;
-    if (user.role !== "ADMIN" && user.id !== responsible && user.id !== assigned) {
+    const r = { orderWaiterId: open?.waiterId ?? null, assignedWaiterId: assigned };
+    if (user.role !== "ADMIN" && !isResponsibleWaiter(user.id, r)) {
       throw new ForbiddenError();
     }
 
