@@ -9,3 +9,4 @@ test-results/
 *.tsbuildinfo
 next-env.d.ts
 claude-loop/.worktrees/
+claude-loop/.last-branch
