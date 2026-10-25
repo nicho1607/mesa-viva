@@ -13,6 +13,7 @@
 - Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
 - Tiempo real: tras cada mutación, en la Server Action `await publishOrderEvent({ tableId, waiterId, event, payload })` (`@/lib/realtime/publish`, nunca lanza; payload solo orderId/tableId/tableNumber/round/version). UI: `useRealtimeInvalidate(url, queryKeys)` → `{ connected }`. Tests del bus: `closeBusForTests()` en afterEach.
 - Server Actions: devuelven `ActionResult<T>` (`@/lib/action-result`), nunca lanzan; `catch (e) { return toActionError(e) }`. Rate limit en memoria con `getRateLimiter`/`enforceRateLimit` (`@/lib/rate-limit`); en tests `resetRateLimitsForTests()`. Lecturas del cliente en `@/lib/domain/queries`.
+- UI cliente (MV-007): `/m/[token]` layout valida el token (getCustomerTable, React.cache) y pinta cabecera; componentes en `src/components/customer/`; hojas con `Sheet` (<dialog> showModal); carrito puro en `@/lib/cart` + `useCart(token)` (useSyncExternalStore + localStorage en try/catch).
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -92,4 +93,17 @@
   - El motivo de callWaiter ("assistance" | "bill") no viaja: el payload whitelist no tiene campo para él. Si la UI de staff lo necesita, añadir un campo al contrato o persistirlo.
   - z.object descarta claves desconocidas: precios enviados por el cliente se ignoran (hay test).
   - Verificado: typecheck, npm test (117), lint, build.
+---
+## 2026-10-25 17:20 - MV-007
+- Menú del cliente en /m/[token]: token inválido → "Este código no es válido, pide ayuda al mesero"; cabecera "Mesa n" + "Mi cuenta" (/m/[token]/cuenta, lo construye MV-008); pestañas pegajosas con scroll-spy (IntersectionObserver + activar la última al tocar fondo) que son enlaces #cat-{id} (teclado nativo); carta con nombre · puntos guía · precio tabular, agotados visibles con "Agotado" en guindilla y sin botón; hoja de plato (cantidad 1–20, nota ≤ 200 con contador y sugerencias Sin cebolla / Término medio / Salsa aparte, "Agregar · $X"); carrito en localStorage por mesa; barra "Ver pedido (n) · $total"; hoja de pedido (cantidad, quitar, editar nota con fusión, total estimado, "Enviar pedido"/"Enviando…", "Pedido enviado · Ronda n" + "Ver mi cuenta"; UNAVAILABLE_PRODUCTS marca "Ya no está disponible" y refresca el menú, el resto se puede enviar).
+- Files: src/app/m/[token]/{layout,page}.tsx, src/components/customer/{CustomerMenu,CategoryTabs,MenuList,DishSheet,CartBar,CartSheet,NoteField,QuantityStepper,Sheet,HeaderNav}.tsx, src/components/customer/use-cart.ts, src/lib/cart.ts, src/lib/customer-table.ts, src/app/globals.css, tests/domain/cart.test.ts, AGENTS.md
+- Plan de diseño (mantener en MV-008/MV-010): fondo plato, hojas en blanco, texto tinta; tinta-suave para descripciones/notas; azafrán solo para foco y el punto "n en tu pedido"; guindilla = agotado/errores; albahaca = confirmación. Bricolage 600 condensada (87.5%) para "Mesa n", categorías, platos y totales; Atkinson para cuerpo y precios (tabular-nums). Filas de carta alineadas a la izquierda con puntos guía, filetes finos, sin tarjetas ni sombras; categoría con filete inferior de 2px en tinta. Pestañas de texto con subrayado de 3px (no píldoras). Única animación: la hoja que sube (desactivada con reduced motion). Lo memorable queda para la comanda (MV-008).
+- **Learnings for future iterations:**
+  - <dialog>: una clase `flex` en la base anula el display:none del UA y deja el diálogo visible cerrado; usar `hidden open:flex`.
+  - resize_window de claude-in-chrome otra vez no achicó el viewport; para probar 360px: en una página del mismo origen `document.body.innerHTML = '<iframe src="/m/..." style="width:360px;height:640px">'` y medir/zoom dentro del iframe.
+  - El scroll-spy necesita un caso especial para la última sección (corta, nunca cruza la franja superior).
+  - Tras TaskStop del `npx next dev` en segundo plano el proceso node puede seguir escuchando: comprobar el puerto y matarlo.
+  - psql en Git Bash con literales no ASCII: `PGCLIENTENCODING=UTF8`.
+  - Verificado en navegador (mesa 3, token dwx43Q_RR6qz_Y21O4wMxoOr): token inválido; pestañas (click + scroll-spy); agotado; hoja de plato con nota + chip + cantidad 2; barra; recarga conserva el carrito; Esc cierra; UNAVAILABLE (Café tinto marcado agotado en BD a mano) → "Ya no está disponible"; editar nota en el carrito; envío → "Pedido enviado · Ronda 1"; BD: orden OPEN ronda 1 con Bandeja paisa x2 "Huevo bien cocido, Sin cebolla" y Jugo de lulo x1 "En leche, sin hielo". Disponibilidad restaurada. 360px: sin scroll horizontal, objetivos ≥ 44px.
+  - Checks: typecheck, lint, npm test (129), build (/m/[token] = ƒ dinámico).
 ---
