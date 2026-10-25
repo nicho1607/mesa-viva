@@ -32,6 +32,8 @@ Arquitectura completa: `docs/ARQUITECTURA.md`. Historias: `claude-loop/prd.json`
 - **Dinero siempre en centavos enteros** (`Int`). Nunca floats; formatear solo en UI con `formatMoney` (`src/lib/money.ts`).
 - **El servidor calcula todos los precios** desde `Product`. El cliente solo envía `productId`, `quantity`, `notes`.
 - Lógica de negocio en **`src/lib/domain`**: pura donde se pueda y con tests Vitest en `tests/domain`.
+- Cuenta: `computeBill(items, { taxRate, tipRate, pricesIncludeTax })` (`@/lib/domain/billing`); opciones desde BD con `parseBillingSettings(await db.setting.findMany())` (defaults seguros). Con `pricesIncludeTax` el IVA solo se desglosa (`total = subtotal + propina`). Propina siempre sobre el subtotal.
+- Estado del cliente: `deriveCustomerStatus(order.status, items.map(i => i.status))` → `IN_PREPARATION | SERVED | CLOSED` (orden no OPEN → CLOSED; sin ítems activos → IN_PREPARATION). Etiquetas en `CUSTOMER_STATUS_LABEL`.
 - **Server Actions** (`src/app/actions`) son capas delgadas: validan con Zod, autorizan, llaman a `lib/domain`.
 - Orden cerrada = inmutable (rechazar si `status != OPEN`).
 - **Tiempo real = "señal + refetch"**: tras el commit, `pg_notify('mesa_viva', …)` → SSE (`/api/events`) → el cliente invalida su query y vuelve a pedir. Los payloads llevan solo `{ type, orderId, version }`, **nunca precios** ni datos de otras mesas.

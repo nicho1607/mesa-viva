@@ -31,3 +31,13 @@
   - eslint ignora src/generated/**.
   - Verificado: typecheck, test, lint, build; una ruta temporal que usaba db, bajo next start, devolvió {"mesas":8}.
 ---
+
+## 2026-10-25 16:30 - MV-003
+- Dominio puro: computeBill(items, { taxRate, tipRate, pricesIncludeTax }) excluye CANCELLED, todo en centavos enteros (Math.round); con pricesIncludeTax taxAmount = subtotal - round(subtotal/(1+taxRate)) y total = subtotal + tip; sin él total = subtotal + tax + tip. parseBillingSettings(rows) con defaults (0.19 / 0.10 / true / COP) ante valores ausentes o inválidos. deriveCustomerStatus(orderStatus, itemStatuses) → IN_PREPARATION | SERVED | CLOSED (+ CUSTOMER_STATUS_LABEL). formatMoney(cents, currency="COP", locale="es-CO") con Intl.NumberFormat cacheado; COP 0 decimales, resto 2.
+- Files: src/lib/domain/billing.ts, src/lib/domain/order-status.ts, src/lib/money.ts, tests/domain/{billing,order-status,money}.test.ts, AGENTS.md; eliminados tests/domain/sanity.test.ts y src/lib/domain/.gitkeep.
+- **Learnings for future iterations:**
+  - Decisión: orden OPEN sin ítems activos (vacía o todo cancelado) → "IN_PREPARATION" (no hay estado EMPTY). Orden CANCELLED → "CLOSED".
+  - Intl es-CO/COP produce "$ 12.500" (espacio no separable): en tests normalizar  /  antes de comparar.
+  - Las funciones de dominio aceptan `string` para status (no importan enums de Prisma) para seguir siendo puras y compatibles con los enums generados.
+  - Verificado: typecheck, vitest tests/domain (24 tests), lint.
+---
