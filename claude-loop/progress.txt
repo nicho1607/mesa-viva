@@ -11,6 +11,7 @@
 - Tests de integración: `tests/integration/*.test.ts` contra `TEST_DATABASE_URL` (BD restaurante_sistema_test, migrada sola por globalSetup); `npm test` requiere Postgres. Fixtures con sufijo aleatorio y limpieza en afterAll.
 - Auth staff: proxy (`src/proxy.ts`) solo comprueba firma JWT; cada página/acción de staff llama `await requireStaff(role?)` de `@/lib/auth` (re-lee BD, ADMIN pasa todo). Helpers sin Prisma en `@/lib/session`; login/logout en `src/app/actions/staff.actions.ts`.
 - Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
+- Tiempo real: tras cada mutación, en la Server Action `await publishOrderEvent({ tableId, waiterId, event, payload })` (`@/lib/realtime/publish`, nunca lanza; payload solo orderId/tableId/tableNumber/round/version). UI: `useRealtimeInvalidate(url, queryKeys)` → `{ connected }`. Tests del bus: `closeBusForTests()` en afterEach.
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -68,4 +69,15 @@
   - La máscara conic-gradient para el borde dentado no pintó en Chrome; un SVG data-URI en background-image (repeat-x) sí.
   - resize_window de claude-in-chrome no bajó el viewport a ancho móvil en esta máquina; verificado a ancho de escritorio.
   - Verificado en navegador: /staff → login?next=/staff; contraseña mala → "Email o contraseña incorrectos"; laura → "Hola, Laura Gómez"; Cerrar sesión → /staff vuelve a pedir login. curl: JWT alg none → 307 a login.
+---
+## 2026-10-25 16:50 - MV-005
+- Tiempo real "señal + refetch": contrato en src/lib/realtime/events.ts (eventos, canales, RealtimePayload + sanitizePayload whitelist); publish/publishMany/publishOrderEvent (pg_notify vía db.$executeRaw, nunca lanzan; publishOrderEvent → mesa + mesero + staff:floor, y order.unassigned al salón si no hay mesero); bus.ts (pg.Client dedicado en globalThis, LISTEN perezoso, reconexión con backoff 250 ms→10 s + re-LISTEN, `resync` a suscriptores); authorize.ts (token de mesa no INACTIVE → table:{id}; staff re-leído de BD: WAITER → waiter:{id}, ADMIN/CASHIER → staff:floor); GET /api/events (SSE, ready + ping 25 s, limpieza en abort/cancel); hook useRealtimeInvalidate (refs para keys/onEvent, reintento manual si EventSource queda CLOSED); QueryProvider montado en el root layout.
+- Files: src/lib/realtime/{events,publish,bus,authorize,use-channel}.ts, src/app/api/events/route.ts, src/components/providers/QueryProvider.tsx, src/app/layout.tsx, tests/integration/realtime.test.ts, AGENTS.md
+- **Learnings for future iterations:**
+  - Tras matar el backend LISTEN (`pg_terminate_backend`) node-pg emite 'error' y luego 'end': el manejador debe ser idempotente (comparar con el cliente actual). Sin handler de 'error' en el Client el proceso se cae.
+  - Las señales emitidas mientras el bus está caído se pierden: por eso el bus envía `resync` y la ruta lo traduce a `event: ready`, que el hook usa para invalidar.
+  - EventSource no reintenta si la respuesta es 401/500 (readyState CLOSED): el hook reabre a mano cada 5 s.
+  - No usar `import "server-only"` en módulos que importan los tests de Vitest (lanza fuera de RSC).
+  - CASHIER también escucha `staff:floor` (cobra cuentas); el rol sale de BD, no del JWT.
+  - Verificado: typecheck, npm test (92), lint, build; curl -N contra npm run dev: sin auth/token malo → 401; token de mesa 1 → headers SSE + ready + evento con `total` eliminado y sin eventos de otra mesa; cookie JWT de Laura → waiter.called en waiter:{id}.
 ---
