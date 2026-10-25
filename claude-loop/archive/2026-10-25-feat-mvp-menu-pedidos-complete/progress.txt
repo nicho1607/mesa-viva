@@ -1,0 +1,180 @@
+## Codebase Patterns
+- Next.js 16 (no 15): `middleware.ts` -> `src/proxy.ts` (export `proxy`). Docs locales en `node_modules/next/dist/docs/`.
+- `cacheComponents` desactivado: páginas que lean BD sin cookies()/headers() necesitan `await connection()` (next/server) o `export const dynamic = "force-dynamic"`, si no se prerenderizan en build.
+- `LayoutProps`/`PageProps` son globales generados: `npm run typecheck` = `next typegen && tsc --noEmit`.
+- Prisma 7: `prisma.config.ts` en la raíz (dotenv/config + env("DATABASE_URL")); usar `@prisma/adapter-pg`. `/src/generated/` ya está en .gitignore por si el generador escribe ahí.
+- Tests Vitest en `tests/**/*.test.ts` (o `src/**/*.test.ts`); alias `@/` vía vite-tsconfig-paths.
+- Tokens Tailwind: `bg-plato text-tinta text-tinta-suave azafran albahaca guindilla`, `font-display` (Bricolage) / `font-sans` (Atkinson).
+- Prisma client: `import { db } from "@/lib/db"`; tipos/enums desde `@/generated/prisma/client`. Tras cambiar el schema: `npx prisma generate` (v7 `migrate dev` no genera ni siembra). SQL custom: `migrate dev --create-only` + editar + `migrate dev`.
+- BD demo: `npm run db:seed` (idempotente). Usuarios: admin@mesaviva.co / admin123; laura@mesaviva.co y andres@mesaviva.co / mesero123. Mesas 1-4 "Salón principal" (Laura), 5-8 "Terraza" (Andrés).
+- psql: `"/c/Program Files/PostgreSQL/18/bin/psql" "<DATABASE_URL sin ?schema=public>"` (psql rechaza el parámetro `schema`).
+- Tests de integración: `tests/integration/*.test.ts` contra `TEST_DATABASE_URL` (BD restaurante_sistema_test, migrada sola por globalSetup); `npm test` requiere Postgres. Fixtures con sufijo aleatorio y limpieza en afterAll.
+- Auth staff: proxy (`src/proxy.ts`) solo comprueba firma JWT; cada página/acción de staff llama `await requireStaff(role?)` de `@/lib/auth` (re-lee BD, ADMIN pasa todo). Helpers sin Prisma en `@/lib/session`; login/logout en `src/app/actions/staff.actions.ts`.
+- Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
+- Tiempo real: tras cada mutación, en la Server Action `await publishOrderEvent({ tableId, waiterId, event, payload })` (`@/lib/realtime/publish`, nunca lanza; payload solo orderId/tableId/tableNumber/round/version). UI: `useRealtimeInvalidate(url, queryKeys)` → `{ connected }`. Tests del bus: `closeBusForTests()` en afterEach.
+- Server Actions: devuelven `ActionResult<T>` (`@/lib/action-result`), nunca lanzan; `catch (e) { return toActionError(e) }`. Rate limit en memoria con `getRateLimiter`/`enforceRateLimit` (`@/lib/rate-limit`); en tests `resetRateLimitsForTests()`. Lecturas del cliente en `@/lib/domain/queries`.
+- UI cliente (MV-007): `/m/[token]` layout valida el token (getCustomerTable, React.cache) y pinta cabecera; componentes en `src/components/customer/`; hojas con `Sheet` (<dialog> showModal); carrito puro en `@/lib/cart` + `useCart(token)` (useSyncExternalStore + localStorage en try/catch).
+- E2E (MV-013): `npm run test:e2e` resetea y siembra `E2E_DATABASE_URL` en el comando del webServer (Playwright arranca el webServer antes del globalSetup), compila y hace `next start -p 3300`; navegador `msedge` (no hay Chrome). Helpers en `tests/e2e/support/` (`waitForRealtime` antes de navegar, `addDish`, `loginStaff`, `e2eQuery`).
+
+## 2026-10-25 16:25 - MV-001
+- Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
+- Scripts: dev, build, start, lint, typecheck, test, test:e2e. Tokens + fuentes en globals.css/layout.tsx; home placeholder con enlace a /staff; carpetas de la sección 4 con .gitkeep; prisma.config.ts; .env.example; AGENTS.md raíz.
+- Files: package.json, package-lock.json, next.config.ts, tsconfig.json, eslint.config.mjs, vitest.config.ts, prisma.config.ts, .env.example, .gitignore, AGENTS.md, src/app/{layout.tsx,page.tsx,globals.css,favicon.ico}, tests/domain/sanity.test.ts, .gitkeep en prisma/, src/app/actions, src/lib/{domain,realtime}, src/components/{customer,staff,ui}, tests/e2e.
+- **Learnings for future iterations:**
+  - vitest 5 exige @types/node ^22 (el template trae ^20 -> ERESOLVE).
+  - bcryptjs 3 trae sus propios tipos (no instalar @types/bcryptjs).
+  - Template de Next 16 usa `@tailwindcss/turbopack` como loader en next.config.ts (no postcss.config).
+  - `tsx` no está instalado; MV-002 debe añadirlo si el seed lo usa (y configurar migrations.seed en prisma.config.ts).
+  - Verificado: typecheck, test, lint, build y dev server (curl /) OK.
+---
+
+## 2026-10-25 16:35 - MV-002
+- schema.prisma según la doc (sección 2) con generador `prisma-client` -> src/generated/prisma y datasource sin url; migración init + índice único parcial one_open_order_per_table (verificado en pg_indexes); src/lib/db.ts singleton PrismaPg; prisma/seed.ts idempotente (4 categorías / 19 productos en centavos COP, 2 zonas con mesero, 8 mesas con token de 24 chars, 2 meseros + admin con bcrypt, 5 settings); tsx + migrations.seed; scripts db:*; postinstall prisma generate; README con credenciales demo.
+- Files: prisma/schema.prisma, prisma/migrations/20261025212354_init/migration.sql, prisma/migrations/migration_lock.toml, prisma/seed.ts, prisma.config.ts, src/lib/db.ts, package.json, package-lock.json, eslint.config.mjs, README.md, AGENTS.md
+- **Learnings for future iterations:**
+  - Prisma 7: `migrate dev` no ejecuta generate ni seed; correr `prisma generate` y `prisma db seed` explícitamente.
+  - El seed importa el cliente por ruta relativa (../src/generated/prisma/client) y crea su propio PrismaClient con adapter.
+  - Product no tiene unique en name: el seed usa findFirst(name+categoryId) + update/create. Table se hace upsert por number sin tocar publicToken en update (los QR siguen valiendo tras re-seed).
+  - eslint ignora src/generated/**.
+  - Verificado: typecheck, test, lint, build; una ruta temporal que usaba db, bajo next start, devolvió {"mesas":8}.
+---
+
+## 2026-10-25 16:30 - MV-003
+- Dominio puro: computeBill(items, { taxRate, tipRate, pricesIncludeTax }) excluye CANCELLED, todo en centavos enteros (Math.round); con pricesIncludeTax taxAmount = subtotal - round(subtotal/(1+taxRate)) y total = subtotal + tip; sin él total = subtotal + tax + tip. parseBillingSettings(rows) con defaults (0.19 / 0.10 / true / COP) ante valores ausentes o inválidos. deriveCustomerStatus(orderStatus, itemStatuses) → IN_PREPARATION | SERVED | CLOSED (+ CUSTOMER_STATUS_LABEL). formatMoney(cents, currency="COP", locale="es-CO") con Intl.NumberFormat cacheado; COP 0 decimales, resto 2.
+- Files: src/lib/domain/billing.ts, src/lib/domain/order-status.ts, src/lib/money.ts, tests/domain/{billing,order-status,money}.test.ts, AGENTS.md; eliminados tests/domain/sanity.test.ts y src/lib/domain/.gitkeep.
+- **Learnings for future iterations:**
+  - Decisión: orden OPEN sin ítems activos (vacía o todo cancelado) → "IN_PREPARATION" (no hay estado EMPTY). Orden CANCELLED → "CLOSED".
+  - Intl es-CO/COP produce "$ 12.500" (espacio no separable): en tests normalizar  /  antes de comparar.
+  - Las funciones de dominio aceptan `string` para status (no importan enums de Prisma) para seguir siendo puras y compatibles con los enums generados.
+  - Verificado: typecheck, vitest tests/domain (24 tests), lint.
+---
+
+## 2026-10-25 16:40 - MV-004
+- src/lib/domain/orders.ts: addItemsToOrder({token,items}) / addItemsToOrderByTableId({tableId,items}) con núcleo común (Zod, precios desde BD, findFirst/create + SELECT FOR UPDATE, reintento P2002 de toda la transacción, ronda = lastRound+1, version++, mesa OCCUPIED); confirmRound, setItemStatus (transiciones válidas, servedAt), cancelItem, closeOrder(orderId, staffUserId, { tipRate? }) → Bill (computeBill + Setting, lines agrupadas), orden CLOSED+closedAt, mesa AVAILABLE. Sin eventos: cada función devuelve { orderId, tableId, tableNumber, waiterId, version, ... }.
+- errors.ts (DomainError + 5 errores tipados, mensajes en español), order-rules.ts puro (canTransitionItem, groupBillLines).
+- BD de test restaurante_sistema_test + TEST_DATABASE_URL; vitest con proyectos unit/integration, globalSetup migra la BD de test, setupFile cambia DATABASE_URL.
+- Files: src/lib/domain/{orders,errors,order-rules}.ts, tests/domain/order-rules.test.ts, tests/integration/{orders.test.ts,global-setup.ts,setup-env.ts,test-db-url.ts}, vitest.config.ts, .env.example, AGENTS.md
+- **Learnings for future iterations:**
+  - Con @prisma/adapter-pg la violación del índice único parcial llega como PrismaClientKnownRequestError P2002 (verificado). Con 2 envíos paralelos casi nunca hay choque (el primero suele confirmar antes); con 5 sí se ejercita el reintento — hay test para ambos.
+  - Prisma importado como valor desde `@/generated/prisma/client` (`Prisma.TransactionClient`, `Prisma.PrismaClientKnownRequestError`).
+  - En $queryRaw castear enums a texto (`status::text`) para comparar con strings.
+  - Bill.taxRate/tipRate son Decimal: llegan como Prisma.Decimal; en tests usar Number(...).
+  - Tras closeOrder, el siguiente addItems de la mesa abre una orden nueva (isNew); OrderClosedError solo aparece si el cierre gana la carrera tras findFirst, o en mutaciones directas por orderId.
+  - Verificado: typecheck, npm test (53 tests, 3 ejecuciones seguidas), lint; BD de test queda vacía tras los tests.
+---
+## 2026-10-25 17:00 - MV-009
+- Login de personal con cookie JWT (jose HS256, 12 h) y protección de /staff vía src/proxy.ts + requireStaff().
+- Files: src/lib/session.ts, src/lib/credentials.ts, src/lib/auth.ts, src/app/actions/staff.actions.ts, src/proxy.ts, src/components/staff/LoginForm.tsx, src/app/staff/login/page.tsx, src/app/staff/page.tsx (placeholder "Hola, {name}" + Cerrar sesión), tests/domain/session.test.ts, tests/integration/credentials.test.ts, AGENTS.md.
+- **Learnings for future iterations:**
+  - No redirigir /staff/login → /staff cuando hay cookie: un usuario desactivado con JWT válido entraría en bucle (requireStaff lo manda a login).
+  - `verifyCredentials` vive aparte de `auth.ts` para poder testearla sin next/headers.
+  - `PageProps<"/staff/login">.searchParams` es una Promise; valores pueden ser string[].
+  - La máscara conic-gradient para el borde dentado no pintó en Chrome; un SVG data-URI en background-image (repeat-x) sí.
+  - resize_window de claude-in-chrome no bajó el viewport a ancho móvil en esta máquina; verificado a ancho de escritorio.
+  - Verificado en navegador: /staff → login?next=/staff; contraseña mala → "Email o contraseña incorrectos"; laura → "Hola, Laura Gómez"; Cerrar sesión → /staff vuelve a pedir login. curl: JWT alg none → 307 a login.
+---
+## 2026-10-25 16:50 - MV-005
+- Tiempo real "señal + refetch": contrato en src/lib/realtime/events.ts (eventos, canales, RealtimePayload + sanitizePayload whitelist); publish/publishMany/publishOrderEvent (pg_notify vía db.$executeRaw, nunca lanzan; publishOrderEvent → mesa + mesero + staff:floor, y order.unassigned al salón si no hay mesero); bus.ts (pg.Client dedicado en globalThis, LISTEN perezoso, reconexión con backoff 250 ms→10 s + re-LISTEN, `resync` a suscriptores); authorize.ts (token de mesa no INACTIVE → table:{id}; staff re-leído de BD: WAITER → waiter:{id}, ADMIN/CASHIER → staff:floor); GET /api/events (SSE, ready + ping 25 s, limpieza en abort/cancel); hook useRealtimeInvalidate (refs para keys/onEvent, reintento manual si EventSource queda CLOSED); QueryProvider montado en el root layout.
+- Files: src/lib/realtime/{events,publish,bus,authorize,use-channel}.ts, src/app/api/events/route.ts, src/components/providers/QueryProvider.tsx, src/app/layout.tsx, tests/integration/realtime.test.ts, AGENTS.md
+- **Learnings for future iterations:**
+  - Tras matar el backend LISTEN (`pg_terminate_backend`) node-pg emite 'error' y luego 'end': el manejador debe ser idempotente (comparar con el cliente actual). Sin handler de 'error' en el Client el proceso se cae.
+  - Las señales emitidas mientras el bus está caído se pierden: por eso el bus envía `resync` y la ruta lo traduce a `event: ready`, que el hook usa para invalidar.
+  - EventSource no reintenta si la respuesta es 401/500 (readyState CLOSED): el hook reabre a mano cada 5 s.
+  - No usar `import "server-only"` en módulos que importan los tests de Vitest (lanza fuera de RSC).
+  - CASHIER también escucha `staff:floor` (cobra cuentas); el rol sale de BD, no del JWT.
+  - Verificado: typecheck, npm test (92), lint, build; curl -N contra npm run dev: sin auth/token malo → 401; token de mesa 1 → headers SSE + ready + evento con `total` eliminado y sin eventos de otra mesa; cookie JWT de Laura → waiter.called en waiter:{id}.
+---
+## 2026-10-25 16:55 - MV-006
+- Server Actions del cliente: getMenu, getTableByToken, submitOrder (addItemsToOrder + publishOrderEvent order.opened/order.items_added), getTableBill (orden OPEN con computeBill o CLOSED <2 h con totales del Bill; ítems por ronda; customerStatus), callWaiter (NEEDS_ATTENTION + waiter.called a mesero + staff:floor). ActionResult + toActionError; rate limit deslizante en memoria (10 envíos/min, 3 llamadas/min por token).
+- Files: src/app/actions/order.actions.ts, src/lib/action-result.ts, src/lib/rate-limit.ts, src/lib/domain/queries.ts, src/lib/domain/tables.ts, tests/domain/{rate-limit,action-result}.test.ts, tests/integration/customer-actions.test.ts, AGENTS.md
+- **Learnings for future iterations:**
+  - Importar un archivo "use server" en Vitest funciona si no importa next/* (la directiva es solo un string).
+  - Tests unitarios no deben importar @/lib/domain/orders (arrastra @/lib/db): duplicar el esquema Zod o mover esquemas a un módulo sin BD si hace falta.
+  - El rate limit es global por proceso: en tests llamar resetRateLimitsForTests() en beforeEach; los tokens inválidos también consumen cupo (barato para probar el límite).
+  - El motivo de callWaiter ("assistance" | "bill") no viaja: el payload whitelist no tiene campo para él. Si la UI de staff lo necesita, añadir un campo al contrato o persistirlo.
+  - z.object descarta claves desconocidas: precios enviados por el cliente se ignoran (hay test).
+  - Verificado: typecheck, npm test (117), lint, build.
+---
+## 2026-10-25 17:20 - MV-007
+- Menú del cliente en /m/[token]: token inválido → "Este código no es válido, pide ayuda al mesero"; cabecera "Mesa n" + "Mi cuenta" (/m/[token]/cuenta, lo construye MV-008); pestañas pegajosas con scroll-spy (IntersectionObserver + activar la última al tocar fondo) que son enlaces #cat-{id} (teclado nativo); carta con nombre · puntos guía · precio tabular, agotados visibles con "Agotado" en guindilla y sin botón; hoja de plato (cantidad 1–20, nota ≤ 200 con contador y sugerencias Sin cebolla / Término medio / Salsa aparte, "Agregar · $X"); carrito en localStorage por mesa; barra "Ver pedido (n) · $total"; hoja de pedido (cantidad, quitar, editar nota con fusión, total estimado, "Enviar pedido"/"Enviando…", "Pedido enviado · Ronda n" + "Ver mi cuenta"; UNAVAILABLE_PRODUCTS marca "Ya no está disponible" y refresca el menú, el resto se puede enviar).
+- Files: src/app/m/[token]/{layout,page}.tsx, src/components/customer/{CustomerMenu,CategoryTabs,MenuList,DishSheet,CartBar,CartSheet,NoteField,QuantityStepper,Sheet,HeaderNav}.tsx, src/components/customer/use-cart.ts, src/lib/cart.ts, src/lib/customer-table.ts, src/app/globals.css, tests/domain/cart.test.ts, AGENTS.md
+- Plan de diseño (mantener en MV-008/MV-010): fondo plato, hojas en blanco, texto tinta; tinta-suave para descripciones/notas; azafrán solo para foco y el punto "n en tu pedido"; guindilla = agotado/errores; albahaca = confirmación. Bricolage 600 condensada (87.5%) para "Mesa n", categorías, platos y totales; Atkinson para cuerpo y precios (tabular-nums). Filas de carta alineadas a la izquierda con puntos guía, filetes finos, sin tarjetas ni sombras; categoría con filete inferior de 2px en tinta. Pestañas de texto con subrayado de 3px (no píldoras). Única animación: la hoja que sube (desactivada con reduced motion). Lo memorable queda para la comanda (MV-008).
+- **Learnings for future iterations:**
+  - <dialog>: una clase `flex` en la base anula el display:none del UA y deja el diálogo visible cerrado; usar `hidden open:flex`.
+  - resize_window de claude-in-chrome otra vez no achicó el viewport; para probar 360px: en una página del mismo origen `document.body.innerHTML = '<iframe src="/m/..." style="width:360px;height:640px">'` y medir/zoom dentro del iframe.
+  - El scroll-spy necesita un caso especial para la última sección (corta, nunca cruza la franja superior).
+  - Tras TaskStop del `npx next dev` en segundo plano el proceso node puede seguir escuchando: comprobar el puerto y matarlo.
+  - psql en Git Bash con literales no ASCII: `PGCLIENTENCODING=UTF8`.
+  - Verificado en navegador (mesa 3, token dwx43Q_RR6qz_Y21O4wMxoOr): token inválido; pestañas (click + scroll-spy); agotado; hoja de plato con nota + chip + cantidad 2; barra; recarga conserva el carrito; Esc cierra; UNAVAILABLE (Café tinto marcado agotado en BD a mano) → "Ya no está disponible"; editar nota en el carrito; envío → "Pedido enviado · Ronda 1"; BD: orden OPEN ronda 1 con Bandeja paisa x2 "Huevo bien cocido, Sin cebolla" y Jugo de lulo x1 "En leche, sin hielo". Disponibilidad restaurada. 360px: sin scroll horizontal, objetivos ≥ 44px.
+  - Checks: typecheck, lint, npm test (129), build (/m/[token] = ƒ dinámico).
+---
+## 2026-10-25 17:25 - MV-008
+- Cuenta en vivo /m/[token]/cuenta: la página pide getTableBill en el servidor (initialData) y LiveBill usa useQuery(["bill", token], refetch al enfocar) + useRealtimeInvalidate. Comanda: ticket blanco con borde dentado arriba (y abajo al cerrarse: "arrancado"), "Tu cuenta" + píldora de estado (azafrán En preparación / albahaca Servido / tinta Servicio finalizado), rondas "Ronda n" con filete discontinuo, filas "qty× plato ···· $línea" con marca por ítem (pendiente anillo / en cocina punto azafrán / servido punto albahaca) y nota en tinta-suave; cancelados tachados con "Cancelado" (no suman). Totales con puntos guía: Subtotal, "IVA incluido (19%)" informativo en tinta-suave, Propina sugerida (10%), doble filete y Total grande en Bricolage. Ronda que llega en vivo: clip-path por pasos (12 pasos, 720 ms, "impresora térmica") + barra azafrán en su encabezado; nada en la carga inicial; desactivada con reduced motion. aria-live polite anuncia "Ronda n agregada a tu cuenta." / cambios de estado. "Reconectando…" solo tras haber conectado una vez. Botones Llamar al mesero / Pedir la cuenta (confirmación local "Avisamos a tu mesero…", bloqueo 8 s, mensaje propio para RATE_LIMITED); cerrada: sin botones y pie "Servicio finalizado / Gracias por tu visita". Sin pedido: "Aún no has pedido nada." + "Ver el menú" + solo "Llamar al mesero". El menú no se bloquea (el siguiente envío abre orden nueva).
+- Files: src/app/m/[token]/cuenta/page.tsx, src/components/customer/{LiveBill,CallWaiterButtons}.tsx, src/app/globals.css (.mv-print), AGENTS.md
+- **Learnings for future iterations:**
+  - Detectar "lo nuevo" respecto al render anterior sin refs ni effects: estado + ajuste durante el render (`if (next !== track) setTrack(next)`, con firma para devolver el mismo objeto). El estado inicial se calcula desde initialData, así la carga no anima.
+  - drop-shadow (filter) en el contenedor del ticket contornea los dientes del SVG; box-shadow no.
+  - Ítems: setItemStatus no permite PENDING→SERVED directo (pasar por IN_PREPARATION).
+  - A 360 px "Propina sugerida (10%)" partía en dos líneas a text-lg: totales text-base en móvil, sm:text-lg.
+  - Verificado en navegador (mesa 3): ronda 1 con notas y totales; ronda 2 añadida por script (addItemsToOrder + publishOrderEvent) apareció sin recargar con .mv-print y anuncio aria-live; estados IN_PREPARATION/SERVED/CANCELLED → marcas, tachado, subtotal sin el cancelado y píldora "Servido"; "Llamar al mesero" → mesa NEEDS_ATTENTION en BD, botones deshabilitados 8 s; la 4ª llamada en un minuto → mensaje RATE_LIMITED; closeOrder + order.closed → "Servicio finalizado", sin botones, borde dentado inferior. 360 px (iframe): sin scroll horizontal, objetivos ≥ 44 px. Mesa 4 → estado vacío. Mesa 3 queda AVAILABLE con la orden cerrada.
+  - Checks: typecheck, lint, npm test (129), build (/m/[token]/cuenta = ƒ).
+---
+## 2026-10-25 17:45 - MV-010
+- Plano del mesero en /staff: cabecera (nombre, rol, Cerrar sesión), línea "n mesas están llamando" (guindilla si >0), interruptor "Sonido" (apagado por defecto, localStorage + pitido WebAudio), "Reconectando…" tras perder el SSE; zonas con filete de 2px en tinta y cuadrícula 2/3/4 columnas. Ficha: franja de estado con icono (Piden la cuenta [recibo] / Te llaman [campana] en guindilla llena, Ronda sin confirmar en azafrán, Ocupada, Libre con borde discontinuo), número grande en Bricolage condensada, puestos, contadores (por confirmar / en cocina / servidos), "Ronda n, hace m min"; enlaza a /staff/mesas/[id] (MV-011); "Atendido" en las llamadas. Toasts apilados (role=status, 6 s, cerrar) "Mesa 7 · Ronda 3" / "Mesa 7 te llama" / "Mesa 7 pide la cuenta"; la ficha afectada pulsa una vez.
+- Contrato: `reason` ("assistance"|"bill") en RealtimePayload + whitelist; nuevo evento `table.updated`. Migración `table_attention_reason` (enum AttentionReason + Table.attentionReason). requestWaiter guarda el motivo; closeOrder y acknowledgeTable lo borran; addItemsToOrder ya no pisa NEEDS_ATTENTION.
+- Files: prisma/schema.prisma, prisma/migrations/20261025221950_table_attention_reason/, src/lib/domain/{floor,tables,orders,errors}.ts, src/lib/realtime/events.ts, src/lib/floor-view.ts, src/app/actions/{floor,order}.actions.ts, src/app/staff/page.tsx, src/components/staff/{FloorBoard,TableTile,Toasts}.tsx, src/components/staff/use-sound.ts, src/app/globals.css (.mv-pulse), tests/integration/{floor,customer-actions}.test.ts, tests/domain/{floor-view,realtime-events}.test.ts, AGENTS.md
+- Plan de diseño (staff): mismas tintas/porcelana que el cliente pero más denso; sin sombras salvo los toasts (tinta sólida con filete izquierdo del color del aviso). Lo único "fuerte" es la franja llena de las llamadas; libre se retira (discontinuo, sin fondo). Única animación: pulso de fondo una vez.
+- **Learnings for future iterations:**
+  - Server Actions de staff: `requireStaff()` hace `redirect()` (lanza); en el catch llamar `unstable_rethrow(e)` antes de `toActionError` o el redirect se vuelve INTERNAL.
+  - `react-hooks/purity` marca `Date.now()` dentro de un componente de servidor; sacarlo a un helper async fuera del componente.
+  - Un overlay absoluto (pulso) pinta encima de hijos no posicionados: dar `relative` a enlace/botón para que quede debajo.
+  - El evento del propio "Atendido" (`table.updated`) no debe pulsar la ficha (ruido); solo eventos del cliente.
+  - Verificado en navegador: Laura ve solo 1–4; pedido desde /m/<token mesa 2> → toast "Mesa 2 · Ronda 1" y ficha "Ronda sin confirmar" sin recargar; "Pedir la cuenta" → "Piden la cuenta" + toast; Atendido → "Ronda sin confirmar"; "Llamar al mesero" → "Te llaman" + toast "Mesa 2 te llama", persiste tras recargar; admin ve 8 mesas, Atendido como admin → BD OCCUPIED sin motivo; ronda 2 → toast en el canal staff:floor. 360 px (iframe): 2 columnas, sin scroll horizontal, objetivos ≥ 44 px. Sonido on/off guarda "on"/"off". Mesa 2 queda con orden OPEN (rondas 1–2, PENDING) para MV-011. No verificado a mano: "Reconectando…" (usa el hook de MV-005).
+  - Checks: typecheck, lint, npm test (146), build (/staff = ƒ).
+---
+
+## 2026-10-25 18:20 - MV-012
+- Admin en /staff/admin (sub-nav Menú / Mesas y zonas / Equipo / Códigos QR; solo ADMIN, otros roles vuelven a /staff; enlace "Administración" en /staff solo para admin). Menú: CRUD de categorías (nombre único, orden; no borra con productos) y productos (precio en pesos → centavos sin floats, categoría, orden, "Disponible / Agotado" en línea; pedidos alguna vez → "Retirar del menú", nunca pedidos → eliminar). Mesas y zonas: zonas con mesero (solo WAITER activos), mesas (número único, puestos, zona, mesero propio opcional "Según la zona"), "Activa / Inactiva" (no con cuenta abierta), eliminar solo sin historial, "Rotar código QR" con aviso. Equipo: lista, crear (bcrypt, email único en minúsculas, contraseña ≥ 8), activar/desactivar (no a sí mismo), cambiar contraseña. QR: /api/qr/[tableId] (PNG, 401/403/404, no-store) y hoja imprimible (tarjetas "Mesa N" + QR + "Escanea para ver el menú y pedir", print CSS con Tailwind print:).
+- Mutaciones de mesas/zonas publican table.updated a staff:floor + meseros afectados (+ mesa); revalidatePath de las páginas admin.
+- Files: src/lib/domain/admin.ts, src/lib/domain/errors.ts (ConflictError), src/lib/admin-form.ts, src/lib/auth.ts (requireAdminPage), src/app/actions/admin.actions.ts, src/app/api/qr/[tableId]/route.ts, src/app/staff/admin/{layout,page}.tsx, src/app/staff/admin/{menu,mesas,equipo,qr}/page.tsx, src/components/admin/{AdminForm,AdminNav,PrintButton}.tsx, src/components/admin/styles.ts, src/app/staff/page.tsx, src/app/globals.css (print), .env.example (PUBLIC_BASE_URL), tests/domain/admin-price.test.ts, tests/integration/admin.test.ts, AGENTS.md
+- Plan de diseño (admin): mismas tintas/porcelana, back-office denso: filas separadas por filetes border-tinta/12 (sin tarjetas), acciones como botones de 44 px bajo cada fila, edición y confirmaciones con <details> en línea; único elemento con carácter = la hoja de QR (tarjetas con borde discontinuo de recorte y "Mesa N" en Bricolage condensada grande).
+- **Learnings for future iterations:**
+  - React 19 resetea los <form action={fn}> tras cada envío: para no perder lo escrito en errores, devolver los valores en el estado y usarlos como defaultValue.
+  - Una Server Action con `intent` + mapa de handlers evita una acción por formulario; los archivos "use server" solo pueden exportar funciones async (los tipos sí).
+  - Los botones submit con name/value (submitter) llegan en el FormData de una form action de React.
+  - Rango de números de mesa: dejar margen alto (≤ 999999) porque los tests de integración usan números grandes aleatorios.
+  - Bash de Git en Windows rompe node -e con backticks dentro de comillas: usar Edit/Write para texto con backticks.
+  - Verificado en navegador (admin): producto "12.500" → $ 12.500 en /m/<mesa 1>; Agotado → el cliente ve "Agotado"; precio "-3.000" → error inline y se conserva el valor; mesa 8 asignada a Laura y restaurada a "Según la zona"; "Inactiva" en mesa 2 → "La mesa 2 tiene una cuenta abierta. Ciérrala antes de desactivarla."; rotar QR de mesa 8 → el token viejo muestra "Este código no es válido"; 8 PNG 512 px cargan en /staff/admin/qr. Laura: sin enlace, /staff/admin → /staff, /api/qr → 403; sin sesión → 401. 360 px (iframe): sin scroll horizontal y objetivos ≥ 44 px en las 4 páginas. No se pulsó "Imprimir".
+  - Datos de dev cambiados: el publicToken de la mesa 8 rotó (antes tHwSHq8zPsQJHB1qbt-AS1Mk); el producto de prueba se eliminó y la asignación de la mesa 8 quedó como estaba.
+  - Checks: typecheck, lint, npm test (182), build.
+---
+
+## 2026-10-25 18:05 - MV-011
+- Detalle de mesa /staff/mesas/[id]: cabecera "Mesa N" + zona, estado y puestos; banda guindilla "La mesa pide la cuenta / te llama" con "Atendido"; rondas de la más nueva a la más vieja como comandas (hora Bogotá, "Sin confirmar"/"En cocina", filete izquierdo azafrán si hay por confirmar), botón principal por ronda "Confirmar ronda" (tinta) o "Ronda servida" (albahaca); por ítem cantidad/nombre/precio, nota resaltada (bloque azafrán/15 con filete azafrán, negrita), estado con punto, "Servido" (solo en cocina) y "Cancelar" con confirmación en línea ("¿Cancelar este plato?" Sí, cancelar / No); cancelados tachados. Barra fija: subtotal en vivo + "Agregar productos" + "Finalizar servicio". Hoja "Agregar productos" (búsqueda sin tildes, chips de categoría, plato desplegable con cantidad + nota, ronda borrador con Quitar, "Enviar ronda (n) · $X"). Hoja "Finalizar servicio" (advertencia "Hay N productos sin servir", propina 0 % / 10 % / Otro % con validación, subtotal/IVA incluido/propina/total, "Finalizar y generar cuenta"). Tras cerrar: "Servicio finalizado. La mesa quedó libre." + cuenta para caja imprimible ("Imprimir cuenta", resto print:hidden). Andrés/otro mesero → "Esta mesa no está asignada a ti."
+- Permisos: decideTableAction (puro) + assertCanActOnTable; CASHIER ve y cierra, no gestiona. Dominio autorizado staff* + serveRound + getTableDetailForStaff.
+- Files: src/lib/domain/{permissions,staff-table}.ts, src/lib/domain/{orders,tables}.ts, src/lib/action-result.ts (mensaje tipRate), src/lib/table-view.ts, src/app/actions/table.actions.ts, src/app/staff/mesas/[id]/page.tsx, src/components/staff/{TableDetail,RoundTicket,AddItemsSheet,CloseServiceSheet,FinalBill}.tsx, tests/domain/table-view.test.ts, tests/integration/staff-table.test.ts, AGENTS.md
+- Plan de diseño: misma familia que la comanda del cliente pero callada (paneles blancos con filete fino, cabecera de ronda con filete discontinuo); lo único fuerte es la nota (bloque azafrán) y la acción principal de la ronda (botón grande). Sin animaciones nuevas.
+- **Learnings for future iterations:**
+  - useRealtimeInvalidate con keys [] para filtrar por payload en onEvent: el `ready` ya no refresca nada; invalidar en un effect cuando `connected` pasa a true.
+  - Cambiar el ancho del borde izquierdo entre estados desplaza el contenido: usar el mismo ancho y cambiar solo el color.
+  - Un contenedor con overflow-x-auto muestra barra en Chrome escritorio: `[scrollbar-width:none]` para las píldoras.
+  - Al filtrar dentro de una hoja inferior su altura salta: altura mínima (min-h-[55dvh]) en el contenido.
+  - Horas: Intl con timeZone fijo (America/Bogota) para que SSR e hidratación coincidan.
+  - Verificado en navegador (Laura, mesa 2): Confirmar ronda 1 → cliente "en cocina" en vivo; ronda 3 (Bandeja paisa "Sin cebolla") añadida por el mesero apareció en /m/<token>/cuenta sin recargar; Ronda 3 confirmada y servida; Patacones cancelado con confirmación en línea → tachado en ambas pantallas, subtotal $ 50.000; diálogo con 1 sin servir mostró la advertencia, "Otro 12,5" → $ 6.250; tras servir todo, cierre con 10 % → cuenta $ 55.000 (cliente: "Servicio finalizado", mismo total); plano: mesa 2 Libre. Andrés → mensaje "no está asignada a ti". 360 px (iframe): sin scroll horizontal, sin objetivos < 44 px. No se pulsó "Imprimir cuenta".
+  - Estado de dev: la orden de la mesa 2 quedó CERRADA (Bill $ 55.000, propina 10 %); después, para revisar el ancho móvil, se abrió una orden nueva en la mesa 2 con ronda 1 PENDING (Empanadas vallunas x1, nota "Salsa aparte").
+  - Checks: typecheck, lint, npm test (201), build (/staff/mesas/[id] = ƒ).
+---
+
+## 2026-10-25 18:20 - MV-013
+- Pruebas E2E con Playwright contra `next start` (producción, SSE real) sobre una BD propia `restaurante_sistema_e2e` (`E2E_DATABASE_URL` en .env, placeholder en .env.example). full-flow (cliente 390x844 + Laura 1024x768): plano 1–4 → ronda 1 (Bandeja paisa "Sin cebolla" + Ajiaco) → aviso "Mesa 1 · Ronda 1" y ficha "Ronda sin confirmar" sin recargar → confirmar → cuenta "En preparación" → ronda 2 (Limonada de coco) en vivo en el detalle → confirmar + servir todo → cliente "Servido" en vivo → "Pedir la cuenta" → ficha "Piden la cuenta" + aviso → finalizar con 10 % → cuenta final y cliente "Servicio finalizado" con total = subtotal (precios del seed) + 10 % ($ 89.100) y Bill en BD igual → plano "Libre". concurrency: dos clientes en la mesa 4 envían a la vez → rondas 1 y 2, una sola orden OPEN. auth: Andrés → "Esta mesa no está asignada a ti."; QR inválido → aviso; /staff sin sesión → login.
+- Files: playwright.config.ts, tests/e2e/{full-flow,concurrency,auth}.spec.ts, tests/e2e/support/{e2e-db,prepare-db,global-setup,helpers}.ts, .env.example, AGENTS.md, README.md
+- Sin bugs de la app encontrados.
+- **Learnings for future iterations:**
+  - Playwright ejecuta el webServer ANTES del globalSetup (runner: plugin setup → globalSetup). Lo que deba pasar antes de arrancar el servidor (reset de BD) va en el comando del webServer.
+  - `prisma migrate reset` puede pedir consentimiento explícito cuando lo lanza un agente: usar `DROP SCHEMA public CASCADE; CREATE SCHEMA public` + `migrate deploy` + `db seed`.
+  - No hay Google Chrome instalado; Edge sí (canal `msedge`), sin descargar navegadores.
+  - `waitForResponse` de `/api/events` (200) sirve como "SSE conectado y página hidratada"; para páginas sin SSE (menú) reintentar el primer toque con `expect(...).toPass()`.
+  - `dt + dd` falla por el span de puntos guía: `dt:text-is("Total") ~ dd`. El `QuantityStepper` tiene "Agregar uno de X": el botón del plato es `/^Agregar ·/`.
+  - El anuncio sr-only (aria-live) duplica textos de estado: usar `exact: true`.
+  - Duración: ~37–40 s por ejecución completa (build incluido); 3 ejecuciones seguidas en verde. La BD de dev no se toca.
+---

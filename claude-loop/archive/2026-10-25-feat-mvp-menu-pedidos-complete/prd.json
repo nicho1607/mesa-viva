@@ -19,8 +19,8 @@
       ],
       "dependsOn": [],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Next 16.4.3 + Prisma 7.10.1 instalados (más nuevos que lo previsto); ver AGENTS.md."
     },
     {
       "id": "MV-002",
@@ -37,7 +37,7 @@
         "MV-001"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "BD local PostgreSQL 18 en localhost:5432, base restaurante_sistema (vacía). DATABASE_URL en .env."
     },
     {
@@ -55,7 +55,7 @@
         "MV-001"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -75,7 +75,7 @@
         "MV-003"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -95,7 +95,7 @@
         "MV-009"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -115,7 +115,7 @@
         "MV-005"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -136,7 +136,7 @@
         "MV-006"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -156,7 +156,7 @@
         "MV-006"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -166,7 +166,7 @@
       "acceptanceCriteria": [
         "Página /staff/login con email + contraseña (bcryptjs)",
         "Sesión en cookie httpOnly, secure en prod, sameSite=lax, firmada con jose (SESSION_SECRET), expira en 12h",
-        "middleware.ts protege /staff/* excepto login; logout borra la cookie",
+        "src/proxy.ts (Next 16, export proxy) protege /staff/* excepto login; logout borra la cookie",
         "src/lib/auth.ts: getSession() y requireStaff(role?) usados en toda acción de staff",
         "Mensaje 'Email o contraseña incorrectos' sin revelar cuál falló",
         "Tests de firma/verificación de sesión; typecheck pasa"
@@ -175,7 +175,7 @@
         "MV-002"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -186,6 +186,7 @@
         "/staff muestra cuadrícula de mesas asignadas (por zona o asignación directa); admin ve todas",
         "Color de borde por estado: ronda sin confirmar, te llaman, ocupada, libre (sección 6)",
         "Suscripción a waiter:{userId}: toast 'Mesa 7 · Ronda 3', sonido opcional, badge en la mesa",
+        "Distinguir \"Te llaman\" de \"Piden la cuenta\": añadir campo reason (\"assistance\"|\"bill\") al whitelist de payload de realtime y al evento waiter.called en callWaiter, y guardarlo para que el plano lo muestre tras recargar (p.ej. columna Table.attentionReason vía migración)",
         "Typecheck pasa; verificar en navegador"
       ],
       "dependsOn": [
@@ -193,7 +194,7 @@
         "MV-009"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -211,7 +212,7 @@
         "MV-010"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -229,7 +230,7 @@
         "MV-009"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -247,7 +248,7 @@
         "MV-011"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

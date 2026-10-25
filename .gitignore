@@ -9,3 +9,10 @@ test-results/
 *.tsbuildinfo
 next-env.d.ts
 claude-loop/.worktrees/
+claude-loop/.last-branch
+!.env.example
+/build
+.DS_Store
+*.pem
+npm-debug.log*
+/src/generated/

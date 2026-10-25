@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* Tokens de diseño — docs/ARQUITECTURA.md sección 6 ("la comanda") */
+@theme {
+  --color-plato: #f7f8f6;
+  --color-tinta: #1d2b4a;
+  --color-tinta-suave: #5b6684;
+  --color-azafran: #e3a21a;
+  --color-albahaca: #3e7d52;
+  --color-guindilla: #c2412d;
+
+  /* Variables definidas por next/font en src/app/layout.tsx */
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --plato: var(--color-plato);
+  --tinta: var(--color-tinta);
+  --tinta-suave: var(--color-tinta-suave);
+  --azafran: var(--color-azafran);
+  --albahaca: var(--color-albahaca);
+  --guindilla: var(--color-guindilla);
+}
+
+body {
+  background: var(--plato);
+  color: var(--tinta);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 3px solid var(--azafran);
+  outline-offset: 2px;
+}
+
+/* Hojas inferiores (<dialog>): bloquear el scroll de fondo y una sola animación de entrada */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mv-sheet[open] {
+    animation: mv-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .mv-sheet[open]::backdrop {
+    animation: mv-fade-in 220ms ease-out;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  /* La comanda: una ronda que llega en vivo se "imprime" línea a línea (pasos, como una térmica). */
+  .mv-print {
+    animation: mv-print 720ms steps(12, end) both;
+  }
+}
+
+@keyframes mv-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes mv-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes mv-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Plano del mesero: la mesa que acaba de cambiar pulsa UNA vez (no en bucle). */
+@media (prefers-reduced-motion: no-preference) {
+  .mv-pulse {
+    animation: mv-pulse 1100ms ease-out 1 both;
+  }
+}
+
+@keyframes mv-pulse {
+  0% {
+    box-shadow: inset 0 0 0 0 var(--pulse, var(--azafran));
+    background: color-mix(in srgb, var(--pulse, var(--azafran)) 18%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+    background: transparent;
+  }
+}
+
+/* Hoja de QR (/staff/admin/qr): papel blanco, sin cortar tarjetas entre páginas */
+@media print {
+  body {
+    background: #fff;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
