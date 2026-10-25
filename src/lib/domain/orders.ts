@@ -144,7 +144,11 @@ async function addItemsCore(
         data: { lastRound: round, version: { increment: 1 } },
         select: { version: true, waiterId: true },
       });
-      await tx.table.update({ where: { id: table.id }, data: { status: "OCCUPIED" } });
+      // Una llamada pendiente (NEEDS_ATTENTION) no se pierde porque llegue otra ronda.
+      await tx.table.updateMany({
+        where: { id: table.id, status: { not: "NEEDS_ATTENTION" } },
+        data: { status: "OCCUPIED" },
+      });
 
       return {
         orderId: locked.id,
@@ -256,7 +260,7 @@ export async function closeOrder(
     });
     const table = await tx.table.update({
       where: { id: order.tableId },
-      data: { status: "AVAILABLE" },
+      data: { status: "AVAILABLE", attentionReason: null },
       select: { number: true },
     });
 

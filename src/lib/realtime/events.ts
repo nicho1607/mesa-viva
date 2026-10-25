@@ -11,6 +11,7 @@ export const REALTIME_EVENTS = [
   "order.closed",
   "waiter.called",
   "order.unassigned",
+  "table.updated", // cambio de estado de mesa sin cambio de orden (p.ej. "Atendido")
 ] as const;
 export type RealtimeEvent = (typeof REALTIME_EVENTS)[number];
 
@@ -33,7 +34,12 @@ export type RealtimePayload = {
   tableNumber?: number;
   round?: number;
   version?: number;
+  /** Solo en `waiter.called`: motivo de la llamada. */
+  reason?: CallReason;
 };
+
+export const CALL_REASONS = ["assistance", "bill"] as const;
+export type CallReason = (typeof CALL_REASONS)[number];
 
 const STRING_FIELDS = ["orderId", "tableId"] as const;
 const NUMBER_FIELDS = ["tableNumber", "round", "version"] as const;
@@ -51,6 +57,7 @@ export function sanitizePayload(input: unknown): RealtimePayload {
     const v = src[key];
     if (typeof v === "number" && Number.isFinite(v)) out[key] = v;
   }
+  if ((CALL_REASONS as readonly unknown[]).includes(src.reason)) out.reason = src.reason as CallReason;
   return out;
 }
 

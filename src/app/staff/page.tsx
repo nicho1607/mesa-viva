@@ -1,14 +1,32 @@
+import type { Metadata } from "next";
 import { logout } from "@/app/actions/staff.actions";
-import { requireStaff } from "@/lib/auth";
+import { FloorBoard } from "@/components/staff/FloorBoard";
+import { requireStaff, type StaffUser } from "@/lib/auth";
+import { getFloorForStaff } from "@/lib/domain/floor";
+import { ROLE_LABEL } from "@/lib/floor-view";
 
-// Placeholder: el panel real de mesas llega en MV-010.
+export const metadata: Metadata = { title: "Mesas · Mesa Viva" };
+
+async function loadFloor(user: StaffUser) {
+  const zones = await getFloorForStaff(user);
+  // Hora del servidor: reloj inicial de "hace n min" (mismo valor al hidratar).
+  return { zones, now: Date.now() };
+}
+
+// Plano de mesas del personal: mesero → sus mesas; admin/caja → todo el salón.
 export default async function StaffHomePage() {
   const user = await requireStaff();
+  const { zones, now } = await loadFloor(user);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-10">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-3xl font-semibold">Hola, {user.name}</h1>
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-28 pt-5 sm:px-6">
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight [font-stretch:87.5%]">
+            {user.name}
+          </h1>
+          <p className="text-tinta-suave">{ROLE_LABEL[user.role] ?? user.role}</p>
+        </div>
         <form action={logout}>
           <button
             type="submit"
@@ -18,7 +36,7 @@ export default async function StaffHomePage() {
           </button>
         </form>
       </header>
-      <p className="text-tinta-suave">Aquí verás tus mesas y los pedidos en cuanto lleguen.</p>
+      <FloorBoard initialZones={zones} serverNow={now} isWaiter={user.role === "WAITER"} />
     </main>
   );
 }

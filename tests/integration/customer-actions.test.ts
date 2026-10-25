@@ -299,14 +299,17 @@ describe("callWaiter", () => {
     await ensureConnected();
 
     expect(await callWaiter(t.publicToken, "bill")).toEqual({ ok: true, data: { tableNumber: t.number } });
-    expect((await db.table.findUniqueOrThrow({ where: { id: t.id } })).status).toBe("NEEDS_ATTENTION");
+    expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
+      status: "NEEDS_ATTENTION",
+      attentionReason: "BILL",
+    });
 
     const mine = (get: () => BusMessage[]) => get().filter((m) => m.kind === "event" && m.payload.tableId === t.id);
     await waitFor(() => mine(waiter).length === 1 && mine(floor).length === 1);
     expect(mine(waiter)[0]).toEqual({
       kind: "event",
       event: "waiter.called",
-      payload: { tableId: t.id, tableNumber: t.number },
+      payload: { tableId: t.id, tableNumber: t.number, reason: "bill" },
     });
   });
 

@@ -75,3 +75,21 @@ html:has(dialog[open]) {
     opacity: 0;
   }
 }
+
+/* Plano del mesero: la mesa que acaba de cambiar pulsa UNA vez (no en bucle). */
+@media (prefers-reduced-motion: no-preference) {
+  .mv-pulse {
+    animation: mv-pulse 1100ms ease-out 1 both;
+  }
+}
+
+@keyframes mv-pulse {
+  0% {
+    box-shadow: inset 0 0 0 0 var(--pulse, var(--azafran));
+    background: color-mix(in srgb, var(--pulse, var(--azafran)) 18%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+    background: transparent;
+  }
+}

@@ -36,6 +36,11 @@ enum TableStatus {
   INACTIVE
 }
 
+enum AttentionReason {
+  ASSISTANCE // "Llamar al mesero"
+  BILL // "Pedir la cuenta"
+}
+
 model User {
   id           String   @id @default(uuid())
   passwordHash String // bcrypt
@@ -59,16 +64,18 @@ model Zone {
 }
 
 model Table {
-  id          String      @id @default(uuid())
-  number      Int         @unique
-  seats       Int         @default(4)
-  publicToken String      @unique // va en el QR: /m/{publicToken}
-  status      TableStatus @default(AVAILABLE)
-  zoneId      String
-  zone        Zone        @relation(fields: [zoneId], references: [id])
-  waiterId    String? // anula al mesero de la zona
-  waiter      User?       @relation("DirectAssignment", fields: [waiterId], references: [id])
-  orders      Order[]
+  id              String           @id @default(uuid())
+  number          Int              @unique
+  seats           Int              @default(4)
+  publicToken     String           @unique // va en el QR: /m/{publicToken}
+  status          TableStatus      @default(AVAILABLE)
+  // Motivo de la última llamada mientras status = NEEDS_ATTENTION; null en otro caso.
+  attentionReason AttentionReason?
+  zoneId          String
+  zone            Zone             @relation(fields: [zoneId], references: [id])
+  waiterId        String? // anula al mesero de la zona
+  waiter          User?            @relation("DirectAssignment", fields: [waiterId], references: [id])
+  orders          Order[]
 }
 
 model Category {

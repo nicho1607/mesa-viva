@@ -79,6 +79,7 @@ export async function callWaiter(
     await publishMany(channels, "waiter.called", {
       tableId: r.tableId,
       tableNumber: r.tableNumber,
+      reason: r.reason,
       ...(r.orderId ? { orderId: r.orderId } : {}),
     });
     return { ok: true, data: { tableNumber: r.tableNumber } };

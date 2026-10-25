@@ -50,3 +50,11 @@ export class NotFoundError extends DomainError {
     super(`${entity} no encontrado`);
   }
 }
+
+/** El usuario de staff no es responsable del recurso (p.ej. una mesa de otro mesero). */
+export class ForbiddenError extends DomainError {
+  readonly code = "FORBIDDEN";
+  constructor(message = "Esta mesa no está asignada a ti") {
+    super(message);
+  }
+}
