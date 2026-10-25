@@ -31,3 +31,18 @@ Los `publicToken` de las mesas (para `/m/{token}`) son aleatorios; consúltalos 
 ## Comandos
 
 `npm run dev` · `npm run build` · `npm run lint` · `npm run typecheck` · `npm test` · `npm run test:e2e`
+
+## Pruebas
+
+- `npm test`: Vitest (unitarias + integración contra `TEST_DATABASE_URL`; requiere Postgres).
+- `npm run test:e2e`: Playwright, flujo completo cliente + mesero en tiempo real, concurrencia y permisos.
+  Usa una BD propia que **se borra y siembra en cada ejecución** (`E2E_DATABASE_URL`, nunca la de desarrollo):
+
+  ```bash
+  psql "postgresql://postgres:<clave>@localhost:5432/postgres" -c "CREATE DATABASE restaurante_sistema_e2e"
+  # en .env: E2E_DATABASE_URL="postgresql://postgres:<clave>@localhost:5432/restaurante_sistema_e2e"
+  npm run test:e2e
+  ```
+
+  Compila y arranca la app en modo producción en el puerto 3300 (`E2E_PORT` para cambiarlo) y usa el
+  Microsoft Edge instalado (`E2E_BROWSER_CHANNEL=chrome` para Google Chrome); no descarga navegadores.

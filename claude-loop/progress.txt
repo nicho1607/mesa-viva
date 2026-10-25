@@ -14,6 +14,7 @@
 - Tiempo real: tras cada mutación, en la Server Action `await publishOrderEvent({ tableId, waiterId, event, payload })` (`@/lib/realtime/publish`, nunca lanza; payload solo orderId/tableId/tableNumber/round/version). UI: `useRealtimeInvalidate(url, queryKeys)` → `{ connected }`. Tests del bus: `closeBusForTests()` en afterEach.
 - Server Actions: devuelven `ActionResult<T>` (`@/lib/action-result`), nunca lanzan; `catch (e) { return toActionError(e) }`. Rate limit en memoria con `getRateLimiter`/`enforceRateLimit` (`@/lib/rate-limit`); en tests `resetRateLimitsForTests()`. Lecturas del cliente en `@/lib/domain/queries`.
 - UI cliente (MV-007): `/m/[token]` layout valida el token (getCustomerTable, React.cache) y pinta cabecera; componentes en `src/components/customer/`; hojas con `Sheet` (<dialog> showModal); carrito puro en `@/lib/cart` + `useCart(token)` (useSyncExternalStore + localStorage en try/catch).
+- E2E (MV-013): `npm run test:e2e` resetea y siembra `E2E_DATABASE_URL` en el comando del webServer (Playwright arranca el webServer antes del globalSetup), compila y hace `next start -p 3300`; navegador `msedge` (no hay Chrome). Helpers en `tests/e2e/support/` (`waitForRealtime` antes de navegar, `addDish`, `loginStaff`, `e2eQuery`).
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -162,4 +163,18 @@
   - Verificado en navegador (Laura, mesa 2): Confirmar ronda 1 → cliente "en cocina" en vivo; ronda 3 (Bandeja paisa "Sin cebolla") añadida por el mesero apareció en /m/<token>/cuenta sin recargar; Ronda 3 confirmada y servida; Patacones cancelado con confirmación en línea → tachado en ambas pantallas, subtotal $ 50.000; diálogo con 1 sin servir mostró la advertencia, "Otro 12,5" → $ 6.250; tras servir todo, cierre con 10 % → cuenta $ 55.000 (cliente: "Servicio finalizado", mismo total); plano: mesa 2 Libre. Andrés → mensaje "no está asignada a ti". 360 px (iframe): sin scroll horizontal, sin objetivos < 44 px. No se pulsó "Imprimir cuenta".
   - Estado de dev: la orden de la mesa 2 quedó CERRADA (Bill $ 55.000, propina 10 %); después, para revisar el ancho móvil, se abrió una orden nueva en la mesa 2 con ronda 1 PENDING (Empanadas vallunas x1, nota "Salsa aparte").
   - Checks: typecheck, lint, npm test (201), build (/staff/mesas/[id] = ƒ).
+---
+
+## 2026-10-25 18:20 - MV-013
+- Pruebas E2E con Playwright contra `next start` (producción, SSE real) sobre una BD propia `restaurante_sistema_e2e` (`E2E_DATABASE_URL` en .env, placeholder en .env.example). full-flow (cliente 390x844 + Laura 1024x768): plano 1–4 → ronda 1 (Bandeja paisa "Sin cebolla" + Ajiaco) → aviso "Mesa 1 · Ronda 1" y ficha "Ronda sin confirmar" sin recargar → confirmar → cuenta "En preparación" → ronda 2 (Limonada de coco) en vivo en el detalle → confirmar + servir todo → cliente "Servido" en vivo → "Pedir la cuenta" → ficha "Piden la cuenta" + aviso → finalizar con 10 % → cuenta final y cliente "Servicio finalizado" con total = subtotal (precios del seed) + 10 % ($ 89.100) y Bill en BD igual → plano "Libre". concurrency: dos clientes en la mesa 4 envían a la vez → rondas 1 y 2, una sola orden OPEN. auth: Andrés → "Esta mesa no está asignada a ti."; QR inválido → aviso; /staff sin sesión → login.
+- Files: playwright.config.ts, tests/e2e/{full-flow,concurrency,auth}.spec.ts, tests/e2e/support/{e2e-db,prepare-db,global-setup,helpers}.ts, .env.example, AGENTS.md, README.md
+- Sin bugs de la app encontrados.
+- **Learnings for future iterations:**
+  - Playwright ejecuta el webServer ANTES del globalSetup (runner: plugin setup → globalSetup). Lo que deba pasar antes de arrancar el servidor (reset de BD) va en el comando del webServer.
+  - `prisma migrate reset` puede pedir consentimiento explícito cuando lo lanza un agente: usar `DROP SCHEMA public CASCADE; CREATE SCHEMA public` + `migrate deploy` + `db seed`.
+  - No hay Google Chrome instalado; Edge sí (canal `msedge`), sin descargar navegadores.
+  - `waitForResponse` de `/api/events` (200) sirve como "SSE conectado y página hidratada"; para páginas sin SSE (menú) reintentar el primer toque con `expect(...).toPass()`.
+  - `dt + dd` falla por el span de puntos guía: `dt:text-is("Total") ~ dd`. El `QuantityStepper` tiene "Agregar uno de X": el botón del plato es `/^Agregar ·/`.
+  - El anuncio sr-only (aria-live) duplica textos de estado: usar `exact: true`.
+  - Duración: ~37–40 s por ejecución completa (build incluido); 3 ejecuciones seguidas en verde. La BD de dev no se toca.
 ---
