@@ -1,0 +1,19 @@
+## Codebase Patterns
+- Next.js 16 (no 15): `middleware.ts` -> `src/proxy.ts` (export `proxy`). Docs locales en `node_modules/next/dist/docs/`.
+- `cacheComponents` desactivado: páginas que lean BD sin cookies()/headers() necesitan `await connection()` (next/server) o `export const dynamic = "force-dynamic"`, si no se prerenderizan en build.
+- `LayoutProps`/`PageProps` son globales generados: `npm run typecheck` = `next typegen && tsc --noEmit`.
+- Prisma 7: `prisma.config.ts` en la raíz (dotenv/config + env("DATABASE_URL")); usar `@prisma/adapter-pg`. `/src/generated/` ya está en .gitignore por si el generador escribe ahí.
+- Tests Vitest en `tests/**/*.test.ts` (o `src/**/*.test.ts`); alias `@/` vía vite-tsconfig-paths.
+- Tokens Tailwind: `bg-plato text-tinta text-tinta-suave azafran albahaca guindilla`, `font-display` (Bricolage) / `font-sans` (Atkinson).
+
+## 2026-10-25 16:25 - MV-001
+- Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
+- Scripts: dev, build, start, lint, typecheck, test, test:e2e. Tokens + fuentes en globals.css/layout.tsx; home placeholder con enlace a /staff; carpetas de la sección 4 con .gitkeep; prisma.config.ts; .env.example; AGENTS.md raíz.
+- Files: package.json, package-lock.json, next.config.ts, tsconfig.json, eslint.config.mjs, vitest.config.ts, prisma.config.ts, .env.example, .gitignore, AGENTS.md, src/app/{layout.tsx,page.tsx,globals.css,favicon.ico}, tests/domain/sanity.test.ts, .gitkeep en prisma/, src/app/actions, src/lib/{domain,realtime}, src/components/{customer,staff,ui}, tests/e2e.
+- **Learnings for future iterations:**
+  - vitest 5 exige @types/node ^22 (el template trae ^20 -> ERESOLVE).
+  - bcryptjs 3 trae sus propios tipos (no instalar @types/bcryptjs).
+  - Template de Next 16 usa `@tailwindcss/turbopack` como loader en next.config.ts (no postcss.config).
+  - `tsx` no está instalado; MV-002 debe añadirlo si el seed lo usa (y configurar migrations.seed en prisma.config.ts).
+  - Verificado: typecheck, test, lint, build y dev server (curl /) OK.
+---

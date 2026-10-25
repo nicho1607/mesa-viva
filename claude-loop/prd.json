@@ -19,8 +19,8 @@
       ],
       "dependsOn": [],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Next 16.4.3 + Prisma 7.10.1 instalados (más nuevos que lo previsto); ver AGENTS.md."
     },
     {
       "id": "MV-002",

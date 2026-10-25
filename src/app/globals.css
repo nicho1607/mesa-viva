@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Tokens de diseño — docs/ARQUITECTURA.md sección 6 ("la comanda") */
+@theme {
+  --color-plato: #f7f8f6;
+  --color-tinta: #1d2b4a;
+  --color-tinta-suave: #5b6684;
+  --color-azafran: #e3a21a;
+  --color-albahaca: #3e7d52;
+  --color-guindilla: #c2412d;
+
+  /* Variables definidas por next/font en src/app/layout.tsx */
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --plato: var(--color-plato);
+  --tinta: var(--color-tinta);
+  --tinta-suave: var(--color-tinta-suave);
+  --azafran: var(--color-azafran);
+  --albahaca: var(--color-albahaca);
+  --guindilla: var(--color-guindilla);
+}
+
+body {
+  background: var(--plato);
+  color: var(--tinta);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 3px solid var(--azafran);
+  outline-offset: 2px;
+}
