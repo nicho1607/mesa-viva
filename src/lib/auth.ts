@@ -43,3 +43,13 @@ export async function requireStaff(role?: StaffRole | StaffRole[]): Promise<Staf
   if (!hasRole(user.role, role)) throw new UnauthorizedError();
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
+
+/**
+ * Para páginas de /staff/admin: sin sesión → login; con sesión de otro rol → vuelve al salón
+ * (en lugar de una página de error). Las Server Actions usan `requireStaff("ADMIN")`.
+ */
+export async function requireAdminPage(): Promise<StaffUser> {
+  const user = await requireStaff();
+  if (user.role !== "ADMIN") redirect("/staff");
+  return user;
+}

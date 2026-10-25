@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { logout } from "@/app/actions/staff.actions";
 import { FloorBoard } from "@/components/staff/FloorBoard";
 import { requireStaff, type StaffUser } from "@/lib/auth";
@@ -27,14 +28,24 @@ export default async function StaffHomePage() {
           </h1>
           <p className="text-tinta-suave">{ROLE_LABEL[user.role] ?? user.role}</p>
         </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="min-h-11 rounded-md border-2 border-tinta px-4 font-bold text-tinta hover:bg-tinta hover:text-plato"
-          >
-            Cerrar sesión
-          </button>
-        </form>
+        <div className="flex flex-wrap gap-2">
+          {user.role === "ADMIN" ? (
+            <Link
+              href="/staff/admin"
+              className="inline-flex min-h-11 items-center rounded-md bg-tinta px-4 font-bold text-plato hover:bg-tinta/90"
+            >
+              Administración
+            </Link>
+          ) : null}
+          <form action={logout}>
+            <button
+              type="submit"
+              className="min-h-11 rounded-md border-2 border-tinta px-4 font-bold text-tinta hover:bg-tinta hover:text-plato"
+            >
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
       </header>
       <FloorBoard initialZones={zones} serverNow={now} isWaiter={user.role === "WAITER"} />
     </main>

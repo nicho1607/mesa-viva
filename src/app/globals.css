@@ -93,3 +93,13 @@ html:has(dialog[open]) {
     background: transparent;
   }
 }
+
+/* Hoja de QR (/staff/admin/qr): papel blanco, sin cortar tarjetas entre páginas */
+@media print {
+  body {
+    background: #fff;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

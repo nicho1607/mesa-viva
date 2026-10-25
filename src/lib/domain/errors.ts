@@ -58,3 +58,17 @@ export class ForbiddenError extends DomainError {
     super(message);
   }
 }
+
+/**
+ * La operación choca con el estado actual (nombre repetido, categoría con productos,
+ * mesa con orden abierta…). `field` indica el campo del formulario al que pertenece, si aplica.
+ */
+export class ConflictError extends DomainError {
+  readonly code = "CONFLICT";
+  constructor(
+    message: string,
+    public readonly field?: string,
+  ) {
+    super(message);
+  }
+}
