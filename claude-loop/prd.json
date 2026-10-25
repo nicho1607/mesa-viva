@@ -186,6 +186,7 @@
         "/staff muestra cuadrícula de mesas asignadas (por zona o asignación directa); admin ve todas",
         "Color de borde por estado: ronda sin confirmar, te llaman, ocupada, libre (sección 6)",
         "Suscripción a waiter:{userId}: toast 'Mesa 7 · Ronda 3', sonido opcional, badge en la mesa",
+        "Distinguir \"Te llaman\" de \"Piden la cuenta\": añadir campo reason (\"assistance\"|\"bill\") al whitelist de payload de realtime y al evento waiter.called en callWaiter, y guardarlo para que el plano lo muestre tras recargar (p.ej. columna Table.attentionReason vía migración)",
         "Typecheck pasa; verificar en navegador"
       ],
       "dependsOn": [
