@@ -49,6 +49,19 @@ html:has(dialog[open]) {
   html {
     scroll-behavior: smooth;
   }
+  /* La comanda: una ronda que llega en vivo se "imprime" línea a línea (pasos, como una térmica). */
+  .mv-print {
+    animation: mv-print 720ms steps(12, end) both;
+  }
+}
+
+@keyframes mv-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 
 @keyframes mv-sheet-in {
