@@ -166,7 +166,7 @@
       "acceptanceCriteria": [
         "Página /staff/login con email + contraseña (bcryptjs)",
         "Sesión en cookie httpOnly, secure en prod, sameSite=lax, firmada con jose (SESSION_SECRET), expira en 12h",
-        "middleware.ts protege /staff/* excepto login; logout borra la cookie",
+        "src/proxy.ts (Next 16, export proxy) protege /staff/* excepto login; logout borra la cookie",
         "src/lib/auth.ts: getSession() y requireStaff(role?) usados en toda acción de staff",
         "Mensaje 'Email o contraseña incorrectos' sin revelar cuál falló",
         "Tests de firma/verificación de sesión; typecheck pasa"
