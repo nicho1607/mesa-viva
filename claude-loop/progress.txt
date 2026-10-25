@@ -12,6 +12,7 @@
 - Auth staff: proxy (`src/proxy.ts`) solo comprueba firma JWT; cada página/acción de staff llama `await requireStaff(role?)` de `@/lib/auth` (re-lee BD, ADMIN pasa todo). Helpers sin Prisma en `@/lib/session`; login/logout en `src/app/actions/staff.actions.ts`.
 - Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
 - Tiempo real: tras cada mutación, en la Server Action `await publishOrderEvent({ tableId, waiterId, event, payload })` (`@/lib/realtime/publish`, nunca lanza; payload solo orderId/tableId/tableNumber/round/version). UI: `useRealtimeInvalidate(url, queryKeys)` → `{ connected }`. Tests del bus: `closeBusForTests()` en afterEach.
+- Server Actions: devuelven `ActionResult<T>` (`@/lib/action-result`), nunca lanzan; `catch (e) { return toActionError(e) }`. Rate limit en memoria con `getRateLimiter`/`enforceRateLimit` (`@/lib/rate-limit`); en tests `resetRateLimitsForTests()`. Lecturas del cliente en `@/lib/domain/queries`.
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -80,4 +81,15 @@
   - No usar `import "server-only"` en módulos que importan los tests de Vitest (lanza fuera de RSC).
   - CASHIER también escucha `staff:floor` (cobra cuentas); el rol sale de BD, no del JWT.
   - Verificado: typecheck, npm test (92), lint, build; curl -N contra npm run dev: sin auth/token malo → 401; token de mesa 1 → headers SSE + ready + evento con `total` eliminado y sin eventos de otra mesa; cookie JWT de Laura → waiter.called en waiter:{id}.
+---
+## 2026-10-25 16:55 - MV-006
+- Server Actions del cliente: getMenu, getTableByToken, submitOrder (addItemsToOrder + publishOrderEvent order.opened/order.items_added), getTableBill (orden OPEN con computeBill o CLOSED <2 h con totales del Bill; ítems por ronda; customerStatus), callWaiter (NEEDS_ATTENTION + waiter.called a mesero + staff:floor). ActionResult + toActionError; rate limit deslizante en memoria (10 envíos/min, 3 llamadas/min por token).
+- Files: src/app/actions/order.actions.ts, src/lib/action-result.ts, src/lib/rate-limit.ts, src/lib/domain/queries.ts, src/lib/domain/tables.ts, tests/domain/{rate-limit,action-result}.test.ts, tests/integration/customer-actions.test.ts, AGENTS.md
+- **Learnings for future iterations:**
+  - Importar un archivo "use server" en Vitest funciona si no importa next/* (la directiva es solo un string).
+  - Tests unitarios no deben importar @/lib/domain/orders (arrastra @/lib/db): duplicar el esquema Zod o mover esquemas a un módulo sin BD si hace falta.
+  - El rate limit es global por proceso: en tests llamar resetRateLimitsForTests() en beforeEach; los tokens inválidos también consumen cupo (barato para probar el límite).
+  - El motivo de callWaiter ("assistance" | "bill") no viaja: el payload whitelist no tiene campo para él. Si la UI de staff lo necesita, añadir un campo al contrato o persistirlo.
+  - z.object descarta claves desconocidas: precios enviados por el cliente se ignoran (hay test).
+  - Verificado: typecheck, npm test (117), lint, build.
 ---
