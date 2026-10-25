@@ -8,6 +8,8 @@
 - Prisma client: `import { db } from "@/lib/db"`; tipos/enums desde `@/generated/prisma/client`. Tras cambiar el schema: `npx prisma generate` (v7 `migrate dev` no genera ni siembra). SQL custom: `migrate dev --create-only` + editar + `migrate dev`.
 - BD demo: `npm run db:seed` (idempotente). Usuarios: admin@mesaviva.co / admin123; laura@mesaviva.co y andres@mesaviva.co / mesero123. Mesas 1-4 "Salón principal" (Laura), 5-8 "Terraza" (Andrés).
 - psql: `"/c/Program Files/PostgreSQL/18/bin/psql" "<DATABASE_URL sin ?schema=public>"` (psql rechaza el parámetro `schema`).
+- Tests de integración: `tests/integration/*.test.ts` contra `TEST_DATABASE_URL` (BD restaurante_sistema_test, migrada sola por globalSetup); `npm test` requiere Postgres. Fixtures con sufijo aleatorio y limpieza en afterAll.
+- Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
 
 ## 2026-10-25 16:25 - MV-001
 - Scaffold con create-next-app (Next 16.4.3, React 19.3, Tailwind v4, TS strict, src/, @/*) movido a la raíz del repo; deps: @prisma/client, @prisma/adapter-pg, pg, zod 4, bcryptjs 3, jose 6, @tanstack/react-query 5, qrcode; dev: prisma 7.10.1, vitest 5, @playwright/test, @types/pg, @types/qrcode, @types/node 22, vite-tsconfig-paths, dotenv.
@@ -40,4 +42,18 @@
   - Intl es-CO/COP produce "$ 12.500" (espacio no separable): en tests normalizar  /  antes de comparar.
   - Las funciones de dominio aceptan `string` para status (no importan enums de Prisma) para seguir siendo puras y compatibles con los enums generados.
   - Verificado: typecheck, vitest tests/domain (24 tests), lint.
+---
+
+## 2026-10-25 16:40 - MV-004
+- src/lib/domain/orders.ts: addItemsToOrder({token,items}) / addItemsToOrderByTableId({tableId,items}) con núcleo común (Zod, precios desde BD, findFirst/create + SELECT FOR UPDATE, reintento P2002 de toda la transacción, ronda = lastRound+1, version++, mesa OCCUPIED); confirmRound, setItemStatus (transiciones válidas, servedAt), cancelItem, closeOrder(orderId, staffUserId, { tipRate? }) → Bill (computeBill + Setting, lines agrupadas), orden CLOSED+closedAt, mesa AVAILABLE. Sin eventos: cada función devuelve { orderId, tableId, tableNumber, waiterId, version, ... }.
+- errors.ts (DomainError + 5 errores tipados, mensajes en español), order-rules.ts puro (canTransitionItem, groupBillLines).
+- BD de test restaurante_sistema_test + TEST_DATABASE_URL; vitest con proyectos unit/integration, globalSetup migra la BD de test, setupFile cambia DATABASE_URL.
+- Files: src/lib/domain/{orders,errors,order-rules}.ts, tests/domain/order-rules.test.ts, tests/integration/{orders.test.ts,global-setup.ts,setup-env.ts,test-db-url.ts}, vitest.config.ts, .env.example, AGENTS.md
+- **Learnings for future iterations:**
+  - Con @prisma/adapter-pg la violación del índice único parcial llega como PrismaClientKnownRequestError P2002 (verificado). Con 2 envíos paralelos casi nunca hay choque (el primero suele confirmar antes); con 5 sí se ejercita el reintento — hay test para ambos.
+  - Prisma importado como valor desde `@/generated/prisma/client` (`Prisma.TransactionClient`, `Prisma.PrismaClientKnownRequestError`).
+  - En $queryRaw castear enums a texto (`status::text`) para comparar con strings.
+  - Bill.taxRate/tipRate son Decimal: llegan como Prisma.Decimal; en tests usar Number(...).
+  - Tras closeOrder, el siguiente addItems de la mesa abre una orden nueva (isNew); OrderClosedError solo aparece si el cierre gana la carrera tras findFirst, o en mutaciones directas por orderId.
+  - Verificado: typecheck, npm test (53 tests, 3 ejecuciones seguidas), lint; BD de test queda vacía tras los tests.
 ---

@@ -36,6 +36,9 @@ Arquitectura completa: `docs/ARQUITECTURA.md`. Historias: `claude-loop/prd.json`
 - Estado del cliente: `deriveCustomerStatus(order.status, items.map(i => i.status))` → `IN_PREPARATION | SERVED | CLOSED` (orden no OPEN → CLOSED; sin ítems activos → IN_PREPARATION). Etiquetas en `CUSTOMER_STATUS_LABEL`.
 - **Server Actions** (`src/app/actions`) son capas delgadas: validan con Zod, autorizan, llaman a `lib/domain`.
 - Orden cerrada = inmutable (rechazar si `status != OPEN`).
+- **Mutaciones de órdenes** en `@/lib/domain/orders`: `addItemsToOrder({ token, items })` (cliente), `addItemsToOrderByTableId({ tableId, items })` (mesero), `confirmRound(orderId, round)`, `setItemStatus(itemId, status)`, `cancelItem(itemId)`, `closeOrder(orderId, staffUserId, { tipRate? })`. Cada una bloquea la orden con `SELECT … FOR UPDATE`, rechaza si no está OPEN, incrementa `version` y **no publica eventos**: devuelve `{ orderId, tableId, tableNumber, waiterId, version, … }` para que la Server Action publique tras el commit.
+- Transiciones de ítem (puras, `canTransitionItem` en `@/lib/domain/order-rules`): PENDING→IN_PREPARATION→SERVED; PENDING/IN_PREPARATION→CANCELLED. `Bill.lines` = `groupBillLines(items)` (producto+precio+nota, sin cancelados).
+- **Errores de dominio** (`@/lib/domain/errors`): `OrderClosedError`, `UnavailableProductsError(productIds)`, `InvalidTableError`, `InvalidTransitionError(from, to)`, `NotFoundError(entity)`; todos extienden `DomainError` (`code` + `message` en español apto para UI). En Server Actions: `if (e instanceof DomainError) return { error: e.message, code: e.code }`. La validación de entrada (Zod) también ocurre en el dominio y lanza `ZodError`.
 - **Tiempo real = "señal + refetch"**: tras el commit, `pg_notify('mesa_viva', …)` → SSE (`/api/events`) → el cliente invalida su query y vuelve a pedir. Los payloads llevan solo `{ type, orderId, version }`, **nunca precios** ni datos de otras mesas.
 
 ## UI
@@ -46,4 +49,10 @@ Arquitectura completa: `docs/ARQUITECTURA.md`. Historias: `claude-loop/prd.json`
 ## Comandos
 - `npm run dev` · `npm run build` · `npm run lint`
 - `npm run typecheck` (next typegen + tsc --noEmit) · `npm test` (vitest run) · `npm run test:e2e` (Playwright)
+
+## Tests
+- Vitest con dos proyectos (`vitest.config.ts`): **unit** (`tests/domain`, sin BD) e **integration** (`tests/integration`, BD real). `npm test` corre ambos; uno solo: `npx vitest run --project unit`.
+- **`npm test` necesita Postgres levantado**: la integración usa `TEST_DATABASE_URL` (BD `restaurante_sistema_test`, nunca la de dev). `tests/integration/global-setup.ts` aplica `prisma migrate deploy` sobre ella en cada ejecución (pasa `DATABASE_URL` al proceso hijo; dotenv no sobrescribe variables ya definidas) y `setup-env.ts` fija `DATABASE_URL = TEST_DATABASE_URL` antes de importar `@/lib/db`. Archivos en serie (`fileParallelism: false`).
+- Crear la BD de test una vez: `psql "<url sin ?schema>" -c "CREATE DATABASE restaurante_sistema_test"` y añadir `TEST_DATABASE_URL` a `.env` (plantilla en `.env.example`).
+- Cada archivo crea sus fixtures con sufijo aleatorio y los borra en `afterAll` (orden: Bill → OrderItem → Order → Table → Zone → Product → Category → User).
 - `.env` (no se commitea) con `DATABASE_URL` y `SESSION_SECRET`; plantilla en `.env.example`.
