@@ -46,6 +46,11 @@ Arquitectura completa: `docs/ARQUITECTURA.md`. Historias: `claude-loop/prd.json`
 - Tokens de color (`bg-plato`, `text-tinta`, `text-tinta-suave`, `azafran`, `albahaca`, `guindilla`) y fuentes (`font-display` = Bricolage Grotesque, `font-sans` = Atkinson Hyperlegible) definidos en `src/app/globals.css` vía `@theme`; ver sección 6 de la doc.
 - Contraste AA, foco visible, objetivos táctiles ≥ 44 px (`min-h-11`), respetar `prefers-reduced-motion`.
 
+## Auth de personal (MV-009)
+- Cookie `mv_session` = JWT HS256 (jose) `{ sub, role, name }`, 12 h, httpOnly, sameSite lax, secure en prod. Helpers puros en `@/lib/session` (`signSession`, `verifySession`, `sessionCookieOptions`, `sanitizeNextPath`, `SESSION_COOKIE`); no importan Prisma, así que sirven en `src/proxy.ts`.
+- `src/proxy.ts` (matcher `/staff`, `/staff/:path*`) solo verifica la firma y redirige a `/staff/login?next=…`; `/staff/login` siempre es accesible. **No basta**: toda página y Server Action de staff empieza con `const user = await requireStaff()` (o `requireStaff("ADMIN")`, `requireStaff(["WAITER","CASHIER"])`) de `@/lib/auth`. Re-lee el `User` de BD, rechaza inactivos (redirect a login) y lanza `UnauthorizedError` si el rol no cuadra; ADMIN pasa cualquier chequeo. `getSession()` = solo cookie, sin BD.
+- Login/logout: `login(prevState, formData)` y `logout()` en `src/app/actions/staff.actions.ts` (usar con `useActionState`). Credenciales: `verifyCredentials(email, password)` en `@/lib/credentials` (bcrypt + hash ficticio si no existe el usuario, contra enumeración por tiempo). El `next` del login pasa siempre por `sanitizeNextPath` (solo rutas `/staff…` relativas).
+
 ## Comandos
 - `npm run dev` · `npm run build` · `npm run lint`
 - `npm run typecheck` (next typegen + tsc --noEmit) · `npm test` (vitest run) · `npm run test:e2e` (Playwright)

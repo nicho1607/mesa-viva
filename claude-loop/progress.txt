@@ -9,6 +9,7 @@
 - BD demo: `npm run db:seed` (idempotente). Usuarios: admin@mesaviva.co / admin123; laura@mesaviva.co y andres@mesaviva.co / mesero123. Mesas 1-4 "Salón principal" (Laura), 5-8 "Terraza" (Andrés).
 - psql: `"/c/Program Files/PostgreSQL/18/bin/psql" "<DATABASE_URL sin ?schema=public>"` (psql rechaza el parámetro `schema`).
 - Tests de integración: `tests/integration/*.test.ts` contra `TEST_DATABASE_URL` (BD restaurante_sistema_test, migrada sola por globalSetup); `npm test` requiere Postgres. Fixtures con sufijo aleatorio y limpieza en afterAll.
+- Auth staff: proxy (`src/proxy.ts`) solo comprueba firma JWT; cada página/acción de staff llama `await requireStaff(role?)` de `@/lib/auth` (re-lee BD, ADMIN pasa todo). Helpers sin Prisma en `@/lib/session`; login/logout en `src/app/actions/staff.actions.ts`.
 - Mutaciones de órdenes en `@/lib/domain/orders` no publican eventos: devuelven `{ orderId, tableId, tableNumber, waiterId, version, ... }` para publicar tras el commit. Errores tipados en `@/lib/domain/errors` (DomainError.code/message).
 
 ## 2026-10-25 16:25 - MV-001
@@ -56,4 +57,15 @@
   - Bill.taxRate/tipRate son Decimal: llegan como Prisma.Decimal; en tests usar Number(...).
   - Tras closeOrder, el siguiente addItems de la mesa abre una orden nueva (isNew); OrderClosedError solo aparece si el cierre gana la carrera tras findFirst, o en mutaciones directas por orderId.
   - Verificado: typecheck, npm test (53 tests, 3 ejecuciones seguidas), lint; BD de test queda vacía tras los tests.
+---
+## 2026-10-25 17:00 - MV-009
+- Login de personal con cookie JWT (jose HS256, 12 h) y protección de /staff vía src/proxy.ts + requireStaff().
+- Files: src/lib/session.ts, src/lib/credentials.ts, src/lib/auth.ts, src/app/actions/staff.actions.ts, src/proxy.ts, src/components/staff/LoginForm.tsx, src/app/staff/login/page.tsx, src/app/staff/page.tsx (placeholder "Hola, {name}" + Cerrar sesión), tests/domain/session.test.ts, tests/integration/credentials.test.ts, AGENTS.md.
+- **Learnings for future iterations:**
+  - No redirigir /staff/login → /staff cuando hay cookie: un usuario desactivado con JWT válido entraría en bucle (requireStaff lo manda a login).
+  - `verifyCredentials` vive aparte de `auth.ts` para poder testearla sin next/headers.
+  - `PageProps<"/staff/login">.searchParams` es una Promise; valores pueden ser string[].
+  - La máscara conic-gradient para el borde dentado no pintó en Chrome; un SVG data-URI en background-image (repeat-x) sí.
+  - resize_window de claude-in-chrome no bajó el viewport a ancho móvil en esta máquina; verificado a ancho de escritorio.
+  - Verificado en navegador: /staff → login?next=/staff; contraseña mala → "Email o contraseña incorrectos"; laura → "Hola, Laura Gómez"; Cerrar sesión → /staff vuelve a pedir login. curl: JWT alg none → 307 a login.
 ---
