@@ -51,8 +51,8 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await sendOrder(customer, 1);
     });
 
-    // 3. Aviso y ficha en vivo (sin recargar); la mesera abre la mesa y confirma la ronda 1.
-    await test.step("la mesera recibe la ronda 1 y la confirma", async () => {
+    // 3. Aviso y ficha en vivo (sin recargar); la mesera abre la mesa.
+    await test.step("la mesera recibe la ronda 1", async () => {
       await expect(waiter.getByRole("status").getByText("Mesa 1 · Ronda 1", { exact: true })).toBeVisible();
       await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Ronda sin confirmar/);
       const detailRealtime = waitForRealtime(waiter);
@@ -61,8 +61,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await detailRealtime;
       const round1 = waiter.getByRole("region", { name: "Ronda 1" });
       await expect(round1.getByText("Sin cebolla")).toBeVisible();
-      await round1.getByRole("button", { name: "Confirmar ronda" }).click();
-      await expect(round1.getByRole("button", { name: "Ronda servida" })).toBeVisible();
+      await expect(round1.getByRole("button", { name: "Confirmar ronda" })).toBeVisible();
     });
 
     // 4. La cuenta del cliente muestra "En preparación"; pide una bebida (ronda 2) y la mesera la ve en vivo.
@@ -72,7 +71,13 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await customer.waitForURL(`**/m/${table.publicToken}/cuenta`);
       await billRealtime;
       await expect(customer.getByText("Estado del pedido: En preparación", { exact: true })).toBeVisible();
+      await expect(customer.getByRole("region", { name: "Ronda 1" }).getByText("pendiente", { exact: true })).toHaveCount(2);
+
+      const round1 = waiter.getByRole("region", { name: "Ronda 1" });
+      await round1.getByRole("button", { name: "Confirmar ronda" }).click();
+      await expect(round1.getByRole("button", { name: "Ronda servida" })).toBeVisible();
       await expect(customer.getByRole("region", { name: "Ronda 1" }).getByText("en cocina")).toHaveCount(2);
+      await customer.screenshot({ path: "test-results/cliente-en-preparacion.png", fullPage: true });
 
       await customer.getByRole("link", { name: "Volver al menú" }).click();
       await customer.waitForURL(`**/m/${table.publicToken}`);
@@ -103,7 +108,10 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(round1.getByRole("button", { name: "Ronda servida" })).toHaveCount(0);
 
       await expect(customer.getByText("Estado del pedido: Servido", { exact: true })).toBeVisible();
+      await expect(customer.getByRole("region", { name: "Ronda 1" }).getByText("servido", { exact: true })).toHaveCount(2);
+      await expect(customer.getByRole("region", { name: "Ronda 2" }).getByText("servido", { exact: true })).toHaveCount(1);
       await expect(customer.locator('dt:text-is("Subtotal") ~ dd')).toHaveText(cop(subtotal));
+      await customer.screenshot({ path: "test-results/cliente-pedido-servido.png", fullPage: true });
     });
 
     // 6. El cliente pide la cuenta → el plano lo muestra.
@@ -143,6 +151,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(customer.getByText("Servicio finalizado", { exact: true })).toBeVisible();
       await expect(customer.locator('dt:text-is("Total") ~ dd')).toHaveText(cop(expectedTotal));
       await expect(customer.getByRole("button", { name: "Pedir la cuenta" })).toHaveCount(0);
+      await customer.screenshot({ path: "test-results/cliente-cuenta-final.png", fullPage: true });
 
       const bills = await e2eQuery<{ subtotal: number; tipAmount: number; total: number; status: string }>(
         `SELECT b.subtotal, b."tipAmount", b.total, o.status::text AS status
