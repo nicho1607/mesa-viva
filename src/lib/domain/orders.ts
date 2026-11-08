@@ -95,6 +95,12 @@ async function addItemsCore(
 ): Promise<AddItemsResult> {
   return withOpenOrderRetry(() =>
     db.$transaction(async (tx) => {
+      // Siempre mesa → orden: serializa con desactivación y evita bloqueos cruzados al cerrar.
+      if ("id" in tableWhere) {
+        await tx.$queryRaw`SELECT id FROM "Table" WHERE id = ${tableWhere.id} FOR UPDATE`;
+      } else {
+        await tx.$queryRaw`SELECT id FROM "Table" WHERE "publicToken" = ${tableWhere.publicToken} FOR UPDATE`;
+      }
       const table = await tx.table.findUnique({ where: tableWhere, include: { zone: true } });
       if (!table || table.status === "INACTIVE") throw new InvalidTableError();
 
@@ -302,6 +308,9 @@ type LockedOrder = {
 };
 
 async function lockOrder(tx: Tx, orderId: string): Promise<LockedOrder> {
+  const ref = await tx.order.findUnique({ where: { id: orderId }, select: { tableId: true } });
+  if (!ref) throw new NotFoundError("Orden");
+  await tx.$queryRaw`SELECT id FROM "Table" WHERE id = ${ref.tableId} FOR UPDATE`;
   const [row] = await tx.$queryRaw<LockedOrder[]>`
     SELECT id, status::text AS status, "lastRound", "tableId", "waiterId"
     FROM "Order" WHERE id = ${orderId} FOR UPDATE`;

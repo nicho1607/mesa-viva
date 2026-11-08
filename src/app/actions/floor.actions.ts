@@ -30,6 +30,7 @@ export async function acknowledgeTable(tableId: string): Promise<ActionResult<{ 
     if (r.changed) {
       const channels = [FLOOR_CHANNEL];
       if (r.waiterId) channels.push(waiterChannel(r.waiterId));
+      if (r.assignedWaiterId) channels.push(waiterChannel(r.assignedWaiterId));
       await publishMany(channels, "table.updated", {
         tableId: r.tableId,
         tableNumber: r.tableNumber,

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import {
   InvalidTableError,
@@ -30,6 +30,25 @@ const f = {
   tableIds: [] as string[],
 };
 let tableCounter = 0;
+
+it("un envío espera el bloqueo de mesa y rechaza la desactivación concurrente", async () => {
+  const table = await newTable();
+  let pending: Promise<unknown> | undefined;
+  await db.$transaction(async (tx) => {
+    await tx.table.update({ where: { id: table.id }, data: { status: "INACTIVE" } });
+    pending = addItemsToOrder({ token: table.publicToken, items: [{ productId: f.burger.id, quantity: 1 }] })
+      .catch((e: unknown) => e);
+    await vi.waitFor(async () => {
+      const rows = await tx.$queryRaw<{ waiting: boolean }[]>`
+        SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock' AND query LIKE 'SELECT id FROM "Table" WHERE "publicToken"%') AS waiting`;
+      expect(rows[0].waiting).toBe(true);
+    }, { timeout: 3000 });
+  });
+  expect(await pending).toBeInstanceOf(InvalidTableError);
+  expect(await db.order.count({ where: { tableId: table.id } })).toBe(0);
+  expect((await db.table.findUniqueOrThrow({ where: { id: table.id } })).status).toBe("INACTIVE");
+});
 
 async function newTable(status: "AVAILABLE" | "INACTIVE" = "AVAILABLE") {
   tableCounter++;

@@ -31,14 +31,18 @@ export type FloorZone = { id: string; name: string; tables: FloorTable[] };
 /**
  * Mesas visibles para `user`:
  * - WAITER: asignadas directamente (`table.waiterId = me`) o, sin asignación directa,
- *   las de una zona suya (`zone.waiterId = me`).
+ *   las de una zona suya (`zone.waiterId = me`), además de sus órdenes abiertas.
  * - ADMIN / CASHIER: todas.
  * Excluye INACTIVE. Agrupadas por zona (orden por nombre) y mesas por número.
  */
 export async function getFloorForStaff(user: { id: string; role: string }): Promise<FloorZone[]> {
   const where: Prisma.TableWhereInput = { status: { not: "INACTIVE" } };
   if (user.role === "WAITER") {
-    where.OR = [{ waiterId: user.id }, { waiterId: null, zone: { waiterId: user.id } }];
+    where.OR = [
+      { waiterId: user.id },
+      { waiterId: null, zone: { waiterId: user.id } },
+      { orders: { some: { status: "OPEN", waiterId: user.id } } },
+    ];
   }
 
   const tables = await db.table.findMany({

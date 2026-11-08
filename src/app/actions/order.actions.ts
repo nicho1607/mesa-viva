@@ -76,6 +76,7 @@ export async function callWaiter(
     const r = await requestWaiter({ token, reason });
     const channels = [FLOOR_CHANNEL];
     if (r.waiterId) channels.push(waiterChannel(r.waiterId));
+    if (r.assignedWaiterId) channels.push(waiterChannel(r.assignedWaiterId));
     await publishMany(channels, "waiter.called", {
       tableId: r.tableId,
       tableNumber: r.tableNumber,

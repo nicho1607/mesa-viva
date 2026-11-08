@@ -1,10 +1,14 @@
 // Plano de mesas (getFloorForStaff), motivo de la llamada y "Atendido" (acknowledgeTable).
 import { randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { getFloorForStaff, type FloorTable } from "@/lib/domain/floor";
 import { addItemsToOrderByTableId, closeOrder, setItemStatus } from "@/lib/domain/orders";
 import { acknowledgeTable, requestWaiter } from "@/lib/domain/tables";
+import { closeBusForTests, ensureConnected, subscribe, type BusMessage } from "@/lib/realtime/bus";
+import { waiterChannel } from "@/lib/realtime/events";
+import { publishOrderEvent } from "@/lib/realtime/publish";
+import { callWaiter } from "@/app/actions/order.actions";
 
 const tag = randomBytes(4).toString("hex");
 const base = 700_000 + (parseInt(tag, 16) % 90_000) * 10;
@@ -25,6 +29,35 @@ const f = {
 const ids = (tables: FloorTable[]) => tables.map((t) => t.number);
 const mine = (zones: Awaited<ReturnType<typeof getFloorForStaff>>) =>
   zones.flatMap((z) => z.tables).filter((t) => t.number >= base && t.number < base + 10);
+
+it("una mesa reasignada sigue visible y envía pedidos y llamadas a ambos responsables", async () => {
+  const order = await addItemsToOrderByTableId({ tableId: f.t4.id, items: [{ productId: f.productId, quantity: 1 }] });
+  const messages = new Map<string, BusMessage[]>([[f.ana, []], [f.beto, []]]);
+  const unsubscribe = [...messages].map(([id, got]) => subscribe(waiterChannel(id), (m) => got.push(m)));
+  try {
+    await db.table.update({ where: { id: f.t4.id }, data: { waiterId: f.beto } });
+    for (const id of messages.keys()) {
+      expect(mine(await getFloorForStaff({ id, role: "WAITER" })).map((t) => t.id)).toContain(f.t4.id);
+    }
+    await ensureConnected();
+    await publishOrderEvent({ ...order, event: "order.items_added", payload: { orderId: order.orderId } });
+    expect((await callWaiter(f.t4.token, "bill")).ok).toBe(true);
+    await vi.waitFor(() => {
+      for (const got of messages.values()) {
+        expect(got.filter((m) => m.kind === "event").map((m) => m.event)).toEqual(["order.items_added", "waiter.called"]);
+      }
+    });
+    expect(await acknowledgeTable({ tableId: f.t4.id }, { id: f.beto, role: "WAITER" })).toMatchObject({
+      waiterId: f.ana, assignedWaiterId: f.beto,
+    });
+    await closeOrder(order.orderId, f.admin);
+    expect(mine(await getFloorForStaff({ id: f.ana, role: "WAITER" })).map((t) => t.id)).not.toContain(f.t4.id);
+  } finally {
+    unsubscribe.forEach((fn) => fn());
+    await closeBusForTests();
+    await db.table.update({ where: { id: f.t4.id }, data: { waiterId: f.ana } });
+  }
+});
 
 beforeAll(async () => {
   const mkUser = (name: string, role: "WAITER" | "ADMIN" = "WAITER") =>

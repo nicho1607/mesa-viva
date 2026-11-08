@@ -60,7 +60,18 @@ export async function publishOrderEvent(args: {
   payload?: RealtimePayload;
 }): Promise<void> {
   const payload: RealtimePayload = { tableId: args.tableId, ...args.payload };
-  await publishMany(orderEventChannels(args.tableId, args.waiterId), args.event, payload);
+  const channels = orderEventChannels(args.tableId, args.waiterId);
+  try {
+    const table = await db.table.findUnique({
+      where: { id: args.tableId },
+      select: { waiterId: true, zone: { select: { waiterId: true } } },
+    });
+    const assigned = table?.waiterId ?? table?.zone.waiterId;
+    if (assigned) channels.push(waiterChannel(assigned));
+  } catch (e) {
+    console.error("[realtime] no se pudo resolver el mesero actual", e);
+  }
+  await publishMany(channels, args.event, payload);
   if (!args.waiterId && args.event !== "order.unassigned" && args.event !== "order.closed") {
     await publish(FLOOR_CHANNEL, "order.unassigned", payload);
   }

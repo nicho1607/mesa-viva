@@ -24,7 +24,6 @@ type BusState = {
   connecting: Promise<void> | null;
   retryTimer: ReturnType<typeof setTimeout> | null;
   attempt: number;
-  hasConnectedBefore: boolean;
   stopped: boolean;
 };
 
@@ -40,7 +39,6 @@ function state(): BusState {
     connecting: null,
     retryTimer: null,
     attempt: 0,
-    hasConnectedBefore: false,
     stopped: false,
   };
   return g.__mesaVivaBus;
@@ -126,8 +124,7 @@ export function ensureConnected(): Promise<void> {
       }
       s.client = client;
       s.attempt = 0;
-      if (s.hasConnectedBefore) broadcastResync();
-      s.hasConnectedBefore = true;
+      broadcastResync();
     } catch (e) {
       client.removeAllListeners();
       client.on("error", () => {});
@@ -177,7 +174,6 @@ export async function closeBusForTests(): Promise<void> {
   s.client = null;
   s.listeners.clear();
   s.attempt = 0;
-  s.hasConnectedBefore = false;
   if (client) {
     client.removeAllListeners();
     client.on("error", () => {});

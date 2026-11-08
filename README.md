@@ -82,7 +82,7 @@ Demo users (development only): `admin@mesaviva.co` / `admin123` · `laura@mesavi
 
 - **Open bug:** the customer's bill doesn't always switch to "Served" without a reload, even though the server emits the event.
 - Needs a long-running Node server for `LISTEN` and SSE, so it doesn't run on serverless.
-- Rate limiting is in memory and doesn't cover staff login.
+- Rate limiting is in memory, including staff login (10 attempts per account per 15 minutes, 100 total per minute, per process).
 - No CI and no deployment yet.
 
 ---
@@ -121,5 +121,5 @@ Requiere Node.js 22+ y PostgreSQL local (probado con la 18). Los comandos son lo
 
 - **Error abierto:** la cuenta del cliente no siempre pasa a "Servido" sin recargar, aunque el servidor emite el evento.
 - Necesita un servidor Node de larga duración (`LISTEN` y SSE); no funciona en serverless.
-- El límite de peticiones está en memoria y no cubre el login del personal.
+- El límite de peticiones está en memoria, incluido el login del personal (10 intentos por cuenta cada 15 minutos y 100 totales por minuto, por proceso).
 - Sin CI ni despliegue todavía.

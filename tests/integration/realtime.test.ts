@@ -43,7 +43,8 @@ describe("bus LISTEN/NOTIFY", () => {
       event: "order.items_added",
       payload: { orderId: "o1", version: 3, round: 2, tableNumber: 7 },
     });
-    expect(b.got).toHaveLength(0);
+    expect(b.events()).toHaveLength(0);
+    expect(b.got).toContainEqual({ kind: "resync" });
   });
 
   it("elimina del payload todo lo que no esté en la whitelist", async () => {
@@ -77,7 +78,7 @@ describe("bus LISTEN/NOTIFY", () => {
     await publish(`table:u-${tag}`, "order.opened", { orderId: "o3" });
     await waitFor(() => keep.events().length === 1);
     await delay(100);
-    expect(a.got).toHaveLength(0);
+    expect(a.events()).toHaveLength(0);
   });
 
   it("publishOrderEvent reparte a mesa, mesero y salón; sin mesero añade order.unassigned", async () => {
@@ -114,6 +115,7 @@ describe("bus LISTEN/NOTIFY", () => {
     const pid = await getBusBackendPid();
     expect(pid).toBeTypeOf("number");
 
+    a.got.length = 0;
     await db.$executeRaw`SELECT pg_terminate_backend(${pid}::int)`;
     await waitFor(() => a.got.some((m) => m.kind === "resync"), 10_000);
     const newPid = await getBusBackendPid();

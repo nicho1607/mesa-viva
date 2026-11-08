@@ -22,6 +22,7 @@ export type CallWaiterResult = {
   tableNumber: number;
   /** Mesero de la orden abierta; si no hay, el de la mesa o el de su zona. */
   waiterId: string | null;
+  assignedWaiterId: string | null;
   orderId: string | null;
   reason: CallWaiterReason;
 };
@@ -34,6 +35,7 @@ export type CallWaiterResult = {
 export async function requestWaiter(raw: unknown): Promise<CallWaiterResult> {
   const { token, reason } = callWaiterInput.parse(raw);
   return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Table" WHERE "publicToken" = ${token} FOR UPDATE`;
     const table = await tx.table.findUnique({
       where: { publicToken: token },
       select: {
@@ -56,6 +58,7 @@ export async function requestWaiter(raw: unknown): Promise<CallWaiterResult> {
       tableId: table.id,
       tableNumber: table.number,
       waiterId: open?.waiterId ?? table.waiterId ?? table.zone.waiterId ?? null,
+      assignedWaiterId: table.waiterId ?? table.zone.waiterId ?? null,
       orderId: open?.id ?? null,
       reason,
     };
@@ -71,6 +74,7 @@ export type AcknowledgeResult = {
   status: TableStatus;
   /** Mesero responsable (orden abierta → mesa → zona) para publicar al canal correcto. */
   waiterId: string | null;
+  assignedWaiterId: string | null;
   orderId: string | null;
   /** false si la mesa no estaba llamando (no se cambió nada). */
   changed: boolean;
@@ -110,7 +114,7 @@ export async function acknowledgeTable(
     }
 
     const status = open ? "OCCUPIED" : "AVAILABLE";
-    const base = { tableId: table.id, tableNumber: table.number, waiterId: responsible, orderId: open?.id ?? null };
+    const base = { tableId: table.id, tableNumber: table.number, waiterId: responsible, assignedWaiterId: assigned, orderId: open?.id ?? null };
     if (table.status !== "NEEDS_ATTENTION") {
       return { ...base, status: table.status, changed: false };
     }

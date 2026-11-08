@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { verifyCredentials } from "@/lib/credentials";
+import { allowLoginAttempt } from "@/lib/login-rate-limit";
 import { SESSION_COOKIE, sanitizeNextPath, sessionCookieOptions, signSession } from "@/lib/session";
 
 export type LoginState = { error?: string; email?: string };
@@ -25,6 +26,8 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!parsed.success) return { error: INVALID };
   const { email, password, next } = parsed.data;
   if (!email || !password) return { error: "Escribe tu email y tu contraseña", email };
+
+  if (!allowLoginAttempt(email)) return { error: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.", email };
 
   const user = await verifyCredentials(email, password);
   if (!user) return { error: INVALID, email };
