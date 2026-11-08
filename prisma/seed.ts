@@ -5,6 +5,9 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role } from "../src/generated/prisma/client";
+import { seedConfig } from "./seed-config";
+
+const { production, adminPassword, waiterPassword } = seedConfig();
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -60,8 +63,8 @@ const MENU: { name: string; products: SeedProduct[] }[] = [
   },
 ];
 
-const DEMO_PASSWORD_WAITER = "mesero123";
-const DEMO_PASSWORD_ADMIN = "admin123";
+const DEMO_PASSWORD_WAITER = waiterPassword;
+const DEMO_PASSWORD_ADMIN = adminPassword;
 
 const USERS: { email: string; name: string; role: Role; password: string }[] = [
   { email: "admin@mesaviva.co", name: "Administración", role: Role.ADMIN, password: DEMO_PASSWORD_ADMIN },
@@ -84,6 +87,11 @@ const SETTINGS: Record<string, string> = {
 };
 
 async function main() {
+  // En producción se inicializa una vez: los reinicios no deben restaurar menú ni contraseñas.
+  if (production && await prisma.setting.findUnique({ where: { key: "_seedInitialized" } })) {
+    console.log("La base de producción ya está inicializada; se conservan sus datos.");
+    return;
+  }
   // Usuarios
   const userIds = new Map<string, string>();
   for (const u of USERS) {
@@ -134,6 +142,14 @@ async function main() {
   // Configuración
   for (const [key, value] of Object.entries(SETTINGS)) {
     await prisma.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+  }
+
+  if (production) {
+    await prisma.setting.upsert({
+      where: { key: "_seedInitialized" },
+      update: { value: "true" },
+      create: { key: "_seedInitialized", value: "true" },
+    });
   }
 
   const counts = {

@@ -89,6 +89,8 @@ Demo users (development only): `admin@mesaviva.co` / `admin123` · `laura@mesavi
 
 ## Español
 
+Despliegue público de prueba: [guía de Render](docs/DESPLIEGUE_RENDER.md) y configuración automática en `render.yaml`.
+
 Pedidos desde la mesa por QR para restaurantes. El cliente pide desde su móvil sin crear cuenta y el mesero recibe cada ronda al instante en su tablero.
 
 ### Cómo lo construí
