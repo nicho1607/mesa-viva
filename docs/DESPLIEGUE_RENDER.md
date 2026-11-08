@@ -7,7 +7,7 @@ El archivo `render.yaml` crea un servicio Node y una base PostgreSQL, ambos en e
 3. Render instala dependencias, genera Prisma y compila Next.js. Al arrancar aplica migraciones e inicializa menú, mesas y usuarios. Si falla cualquier paso, no inicia el servidor.
 4. En el servicio, abre **Environment**. Render genera `SESSION_SECRET`, `SEED_ADMIN_PASSWORD` y `SEED_WAITER_PASSWORD`; no se guardan en Git. Consulta las contraseñas allí sin publicarlas ni pegarlas en logs.
 5. Abre la URL HTTPS del servicio y entra a `/staff/login`. Admin: `admin@mesaviva.co` con `SEED_ADMIN_PASSWORD`. Meseros: `laura@mesaviva.co` y `andres@mesaviva.co` con `SEED_WAITER_PASSWORD`.
-6. Como administrador, abre `/staff/admin/qr` desde la URL HTTPS pública. Sin `PUBLIC_BASE_URL`, los QR usan el origen de esa petición. No copies la URL `localhost` ni la IP Wi-Fi del PC a Render. Si luego configuras un dominio, define `PUBLIC_BASE_URL` con su URL HTTPS, sin barra final.
+6. Como administrador, abre `/staff/admin/qr` desde la URL HTTPS pública. El Blueprint configura `PUBLIC_BASE_URL` a partir de `RENDER_EXTERNAL_URL`, el dominio público que asigna Render. Es necesario: detrás del proxy, el origen interno de la petición puede ser `0.0.0.0:10000`. No copies la URL `localhost` ni la IP Wi-Fi del PC a Render. Si luego configuras un dominio propio, cambia esa variable en el Blueprint por su URL HTTPS, sin barra final.
 7. Desactiva el Wi-Fi del celular, escanea el QR y prueba pedido → confirmar → servir → cerrar. El cliente debe ver los cambios desde **Mi cuenta**, sin recargar.
 
 ## Reinicios y datos
