@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/staff/admin/mesas", label: "Mesas y zonas" },
   { href: "/staff/admin/equipo", label: "Equipo" },
   { href: "/staff/admin/qr", label: "Códigos QR" },
+  { href: "/staff/admin/ventas", label: "Ventas" },
 ];
 
 export function AdminNav() {
