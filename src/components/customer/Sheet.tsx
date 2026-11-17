@@ -18,6 +18,7 @@ type Props = {
 
 export function Sheet({ open, onClose, title, subtitle, children, footer }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   useEffect(() => {
@@ -25,6 +26,57 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    const body = bodyRef.current;
+    const viewport = window.visualViewport;
+    if (!open || !dialog || !body || !viewport) return;
+
+    let frame = 0;
+
+    const syncViewport = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const field = document.activeElement;
+        // En iOS el teclado reduce el área visible, pero el diálogo fijo sigue anclado al layout.
+        const layoutHeight = document.documentElement.clientHeight;
+        if (!(field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement)
+          || !body.contains(field) || viewport.scale !== 1 || viewport.height >= layoutHeight) {
+          dialog.style.removeProperty("--mv-sheet-bottom");
+          dialog.style.removeProperty("--mv-sheet-height");
+          return;
+        }
+
+        const bottom = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
+        dialog.style.setProperty("--mv-sheet-bottom", `${bottom}px`);
+        dialog.style.setProperty("--mv-sheet-height", `${viewport.height}px`);
+
+        const bounds = body.getBoundingClientRect();
+        const fieldBounds = field.getBoundingClientRect();
+        if (fieldBounds.top < bounds.top || fieldBounds.height > bounds.height) {
+          body.scrollTop += fieldBounds.top - bounds.top - 8;
+        } else if (fieldBounds.bottom > bounds.bottom) {
+          body.scrollTop += fieldBounds.bottom - bounds.bottom + 8;
+        }
+      });
+    };
+
+    syncViewport();
+    viewport.addEventListener("resize", syncViewport);
+    viewport.addEventListener("scroll", syncViewport);
+    dialog.addEventListener("focusin", syncViewport);
+    dialog.addEventListener("focusout", syncViewport);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", syncViewport);
+      viewport.removeEventListener("scroll", syncViewport);
+      dialog.removeEventListener("focusin", syncViewport);
+      dialog.removeEventListener("focusout", syncViewport);
+      dialog.style.removeProperty("--mv-sheet-bottom");
+      dialog.style.removeProperty("--mv-sheet-height");
+    };
   }, [open]);
 
   return (
@@ -42,7 +94,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="mv-sheet fixed inset-x-0 top-auto bottom-0 m-0 mx-auto hidden max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex"
+      className="mv-sheet fixed inset-x-0 top-auto bottom-[var(--mv-sheet-bottom,0px)] m-0 mx-auto hidden max-h-[min(92dvh,var(--mv-sheet-height,92dvh))] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex"
     >
       <div className="flex items-start gap-3 border-b border-tinta/10 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
@@ -62,7 +114,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
           </svg>
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
+      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
       {footer ? (
         <div className="border-t border-tinta/10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>
       ) : null}

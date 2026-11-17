@@ -279,7 +279,7 @@ export async function closeOrder(
     });
     const table = await tx.table.update({
       where: { id: order.tableId },
-      data: { status: "AVAILABLE", attentionReason: null },
+      data: { status: "AVAILABLE", attentionReason: null, pendingPaymentMethod: null },
       select: { number: true },
     });
 

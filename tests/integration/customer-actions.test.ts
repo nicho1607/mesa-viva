@@ -8,6 +8,7 @@ import { closeOrder, setItemStatus } from "@/lib/domain/orders";
 import { CLOSED_BILL_WINDOW_MS, getTableBillData } from "@/lib/domain/queries";
 import { closeBusForTests, ensureConnected, subscribe, type BusMessage } from "@/lib/realtime/bus";
 import { FLOOR_CHANNEL, tableChannel, waiterChannel } from "@/lib/realtime/events";
+import { PAYMENT_METHODS } from "@/lib/payment-methods";
 import { resetRateLimitsForTests } from "@/lib/rate-limit";
 
 const tag = randomBytes(4).toString("hex");
@@ -298,18 +299,52 @@ describe("callWaiter", () => {
     const floor = collect(FLOOR_CHANNEL);
     await ensureConnected();
 
-    expect(await callWaiter(t.publicToken, "bill")).toEqual({ ok: true, data: { tableNumber: t.number } });
+    const order = await submitOrder(t.publicToken, [{ productId: f.soda.id, quantity: 1 }]);
+    if (!order.ok) throw new Error(order.error);
+    expect(await callWaiter(t.publicToken, "bill", "MIXED")).toEqual({ ok: true, data: { tableNumber: t.number } });
     expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
       status: "NEEDS_ATTENTION",
       attentionReason: "BILL",
+      pendingPaymentMethod: "MIXED",
     });
 
-    const mine = (get: () => BusMessage[]) => get().filter((m) => m.kind === "event" && m.payload.tableId === t.id);
+    const mine = (get: () => BusMessage[]) => get().filter((m) =>
+      m.kind === "event" && m.event === "waiter.called" && m.payload.tableId === t.id,
+    );
     await waitFor(() => mine(waiter).length === 1 && mine(floor).length === 1);
     expect(mine(waiter)[0]).toEqual({
       kind: "event",
       event: "waiter.called",
-      payload: { tableId: t.id, tableNumber: t.number, reason: "bill" },
+      payload: { tableId: t.id, tableNumber: t.number, reason: "bill", orderId: order.data.orderId },
+    });
+  });
+
+  it.each(PAYMENT_METHODS)("guarda %s para el aviso de cuenta y lo borra al pedir asistencia", async (method) => {
+    const t = await newTable();
+    expect((await submitOrder(t.publicToken, [{ productId: f.soda.id, quantity: 1 }])).ok).toBe(true);
+    expect((await callWaiter(t.publicToken, "bill", method)).ok).toBe(true);
+    expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
+      attentionReason: "BILL",
+      pendingPaymentMethod: method,
+    });
+
+    expect((await callWaiter(t.publicToken, "assistance")).ok).toBe(true);
+    expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
+      attentionReason: "ASSISTANCE",
+      pendingPaymentMethod: null,
+    });
+  });
+
+  it("rechaza un método inválido, ausente o una cuenta sin orden abierta sin modificar la mesa", async () => {
+    const t = await newTable();
+    // @ts-expect-error: método fuera del contrato
+    expect(await callWaiter(t.publicToken, "bill", "INVALID")).toMatchObject({ ok: false, code: "VALIDATION" });
+    expect(await callWaiter(t.publicToken, "bill")).toMatchObject({ ok: false, code: "VALIDATION" });
+    expect(await callWaiter(t.publicToken, "bill", "CASH")).toMatchObject({ ok: false, code: "ORDER_CLOSED" });
+    expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
+      status: "AVAILABLE",
+      attentionReason: null,
+      pendingPaymentMethod: null,
     });
   });
 

@@ -395,10 +395,16 @@ export async function setTableActive(actor: Actor, raw: unknown): Promise<FloorC
     if (!active) {
       if (t.orders.length > 0) throw new ConflictError(OPEN_ORDER_MESSAGE(t.number, "desactivarla"));
       if (t.status !== "INACTIVE") {
-        await tx.table.update({ where: { id }, data: { status: "INACTIVE", attentionReason: null } });
+        await tx.table.update({
+          where: { id },
+          data: { status: "INACTIVE", attentionReason: null, pendingPaymentMethod: null },
+        });
       }
     } else if (t.status === "INACTIVE") {
-      await tx.table.update({ where: { id }, data: { status: "AVAILABLE", attentionReason: null } });
+      await tx.table.update({
+        where: { id },
+        data: { status: "AVAILABLE", attentionReason: null, pendingPaymentMethod: null },
+      });
     }
     return change;
   });

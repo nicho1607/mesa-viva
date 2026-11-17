@@ -5,6 +5,7 @@
 
 import Link from "next/link";
 import type { FloorTable } from "@/lib/domain/floor";
+import { PAYMENT_METHOD_LABEL } from "@/lib/payment-methods";
 import { TILE_LABEL, needsAck, openedLabel, tileKind, type TileKind } from "@/lib/floor-view";
 
 const FRAME: Record<TileKind, string> = {
@@ -83,7 +84,8 @@ type Props = {
 export function TableTile({ table, now, pulse, acking, onAck }: Props) {
   const kind = tileKind(table);
   const o = table.order;
-  const label = TILE_LABEL[kind];
+  const method = table.pendingPaymentMethod;
+  const label = kind === "bill" && method ? `${TILE_LABEL[kind]} · ${PAYMENT_METHOD_LABEL[method]}` : TILE_LABEL[kind];
   const ack = needsAck(kind);
 
   return (

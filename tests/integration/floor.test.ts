@@ -41,7 +41,7 @@ it("una mesa reasignada sigue visible y envía pedidos y llamadas a ambos respon
     }
     await ensureConnected();
     await publishOrderEvent({ ...order, event: "order.items_added", payload: { orderId: order.orderId } });
-    expect((await callWaiter(f.t4.token, "bill")).ok).toBe(true);
+    expect((await callWaiter(f.t4.token, "bill", "CASH")).ok).toBe(true);
     await vi.waitFor(() => {
       for (const got of messages.values()) {
         expect(got.filter((m) => m.kind === "event").map((m) => m.event)).toEqual(["order.items_added", "waiter.called"]);
@@ -145,11 +145,11 @@ describe("getFloorForStaff", () => {
 
 describe("motivo de la llamada + acknowledgeTable", () => {
   it("requestWaiter guarda el motivo; otra ronda no borra la llamada; Atendido → OCCUPIED", async () => {
-    await requestWaiter({ token: f.t1.token, reason: "bill" });
+    await requestWaiter({ token: f.t1.token, reason: "bill", paymentMethod: "MIXED" });
     let row = await db.table.findUniqueOrThrow({ where: { id: f.t1.id } });
     expect(row).toMatchObject({ status: "NEEDS_ATTENTION", attentionReason: "BILL" });
     let t = mine(await getFloorForStaff({ id: f.ana, role: "WAITER" })).find((x) => x.id === f.t1.id)!;
-    expect(t.attentionReason).toBe("bill");
+    expect(t).toMatchObject({ attentionReason: "bill", pendingPaymentMethod: "MIXED" });
 
     await addItemsToOrderByTableId({ tableId: f.t1.id, items: [{ productId: f.productId, quantity: 1 }] });
     row = await db.table.findUniqueOrThrow({ where: { id: f.t1.id } });
@@ -161,7 +161,7 @@ describe("motivo de la llamada + acknowledgeTable", () => {
     const r = await acknowledgeTable({ tableId: f.t1.id }, { id: f.ana, role: "WAITER" });
     expect(r).toMatchObject({ status: "OCCUPIED", changed: true, tableNumber: f.t1.number, waiterId: f.ana });
     row = await db.table.findUniqueOrThrow({ where: { id: f.t1.id } });
-    expect(row).toMatchObject({ status: "OCCUPIED", attentionReason: null });
+    expect(row).toMatchObject({ status: "OCCUPIED", attentionReason: null, pendingPaymentMethod: null });
     t = mine(await getFloorForStaff({ id: f.ana, role: "WAITER" })).find((x) => x.id === f.t1.id)!;
     expect(t.attentionReason).toBeNull();
 
@@ -195,12 +195,13 @@ describe("motivo de la llamada + acknowledgeTable", () => {
   });
 
   it("closeOrder borra el motivo y deja la mesa AVAILABLE", async () => {
-    await requestWaiter({ token: f.t1.token, reason: "bill" });
+    await requestWaiter({ token: f.t1.token, reason: "bill", paymentMethod: "CARD" });
     const open = await db.order.findFirstOrThrow({ where: { tableId: f.t1.id, status: "OPEN" } });
     await closeOrder(open.id, f.ana);
     expect(await db.table.findUniqueOrThrow({ where: { id: f.t1.id } })).toMatchObject({
       status: "AVAILABLE",
       attentionReason: null,
+      pendingPaymentMethod: null,
     });
   });
 

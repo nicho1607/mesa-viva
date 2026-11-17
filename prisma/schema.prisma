@@ -41,6 +41,13 @@ enum AttentionReason {
   BILL // "Pedir la cuenta"
 }
 
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  MIXED
+}
+
 model User {
   id           String   @id @default(uuid())
   passwordHash String // bcrypt
@@ -71,6 +78,7 @@ model Table {
   status          TableStatus      @default(AVAILABLE)
   // Motivo de la última llamada mientras status = NEEDS_ATTENTION; null en otro caso.
   attentionReason AttentionReason?
+  pendingPaymentMethod PaymentMethod?
   zoneId          String
   zone            Zone             @relation(fields: [zoneId], references: [id])
   waiterId        String? // anula al mesero de la zona

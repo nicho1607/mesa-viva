@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import type { Prisma, TableStatus } from "@/generated/prisma/client";
 import { REASON_FROM_DB, type CallWaiterReason } from "@/lib/domain/tables";
+import type { PaymentMethod } from "@/lib/payment-methods";
 
 export type FloorOrderSummary = {
   id: string;
@@ -23,6 +24,7 @@ export type FloorTable = {
   zoneName: string;
   status: TableStatus;
   attentionReason: CallWaiterReason | null;
+  pendingPaymentMethod: PaymentMethod | null;
   order: FloorOrderSummary | null;
 };
 
@@ -54,6 +56,7 @@ export async function getFloorForStaff(user: { id: string; role: string }): Prom
       seats: true,
       status: true,
       attentionReason: true,
+      pendingPaymentMethod: true,
       zone: { select: { id: true, name: true } },
       orders: {
         where: { status: "OPEN" },
@@ -95,6 +98,7 @@ export async function getFloorForStaff(user: { id: string; role: string }): Prom
       zoneName: t.zone.name,
       status: t.status,
       attentionReason: t.status === "NEEDS_ATTENTION" && t.attentionReason ? REASON_FROM_DB[t.attentionReason] : null,
+      pendingPaymentMethod: t.status === "NEEDS_ATTENTION" && t.attentionReason === "BILL" ? t.pendingPaymentMethod : null,
       order,
     });
   }

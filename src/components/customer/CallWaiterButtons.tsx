@@ -6,13 +6,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { callWaiter } from "@/app/actions/order.actions";
+import { Sheet } from "@/components/customer/Sheet";
+import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
 
 type Reason = "assistance" | "bill";
 type CallState =
   | { kind: "idle" }
   | { kind: "sending"; reason: Reason }
   | { kind: "sent"; reason: Reason }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; paymentMethod?: PaymentMethod };
 
 const COOLDOWN_MS = 8_000;
 
@@ -23,6 +25,8 @@ const SENT_TEXT: Record<Reason, string> = {
 
 export function CallWaiterButtons({ token, withBill }: { token: string; withBill: boolean }) {
   const [state, setState] = useState<CallState>({ kind: "idle" });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const sending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -33,25 +37,40 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
 
   const busy = state.kind === "sending" || state.kind === "sent";
 
-  async function call(reason: Reason) {
-    if (busy) return;
+  async function call(reason: Reason, paymentMethod?: PaymentMethod) {
+    if (busy || sending.current) return;
+    sending.current = true;
     setState({ kind: "sending", reason });
-    const r = await callWaiter(token, reason);
-    if (r.ok) {
-      setState({ kind: "sent", reason });
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setState({ kind: "idle" }), COOLDOWN_MS);
-    } else {
+    try {
+      const r = await callWaiter(token, reason, paymentMethod);
+      if (r.ok) {
+        setPickerOpen(false);
+        setState({ kind: "sent", reason });
+        timer.current = setTimeout(() => setState({ kind: "idle" }), COOLDOWN_MS);
+        return;
+      }
       setState({
         kind: "error",
+        paymentMethod,
         message:
           r.code === "RATE_LIMITED"
             ? "Ya avisamos a tu mesero hace un momento. Espera un minuto antes de volver a llamar."
             : r.error,
       });
+    } catch {
+      setState({ kind: "error", paymentMethod, message: "No pudimos avisar al mesero. Inténtalo de nuevo." });
+    } finally {
+      sending.current = false;
     }
   }
 
+  function closePicker() {
+    if (sending.current || state.kind === "sending") return;
+    setPickerOpen(false);
+    setState({ kind: "idle" });
+  }
+
+  const failedMethod = state.kind === "error" ? state.paymentMethod : undefined;
   const label = (reason: Reason, text: string) =>
     state.kind === "sending" && state.reason === reason ? "Avisando…" : text;
 
@@ -69,11 +88,16 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
         {withBill ? (
           <button
             type="button"
-            onClick={() => void call("bill")}
-            disabled={busy}
-            className="flex min-h-13 items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-[#25365c] disabled:bg-tinta/45"
+            onClick={() => {
+              if (busy) return;
+              setState({ kind: "idle" });
+              setPickerOpen(true);
+            }}
+            aria-haspopup="dialog"
+            aria-disabled={busy}
+            className="flex min-h-13 items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-[#25365c] aria-disabled:bg-tinta/45"
           >
-            {label("bill", "Pedir la cuenta")}
+            Pedir la cuenta
           </button>
         ) : null}
       </div>
@@ -87,10 +111,44 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
             </span>
             {SENT_TEXT[state.reason]}
           </p>
-        ) : state.kind === "error" ? (
+        ) : state.kind === "error" && !pickerOpen ? (
           <p className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">{state.message}</p>
         ) : null}
       </div>
+      {withBill ? (
+        <Sheet open={pickerOpen} onClose={closePicker} title="Método de pago">
+          <div className="grid gap-2">
+            {PAYMENT_METHODS.map((method) => (
+              <button
+                key={method}
+                type="button"
+                disabled={busy}
+                onClick={() => void call("bill", method)}
+                className="min-h-11 rounded-xl border-2 border-tinta px-4 font-bold text-tinta hover:bg-tinta/[0.04] disabled:opacity-50"
+              >
+                {PAYMENT_METHOD_LABEL[method]}
+              </button>
+            ))}
+          </div>
+          <div role="status" className="mt-3">
+            {state.kind === "sending" ? <p>Avisando…</p> : null}
+            {state.kind === "error" && failedMethod ? (
+              <p className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">
+                {state.message}
+              </p>
+            ) : null}
+          </div>
+          {failedMethod ? (
+            <button
+              type="button"
+              onClick={() => void call("bill", failedMethod)}
+              className="mt-2 min-h-11 rounded-xl bg-tinta px-4 font-bold text-plato"
+            >
+              Reintentar con {PAYMENT_METHOD_LABEL[failedMethod]}
+            </button>
+          ) : null}
+        </Sheet>
+      ) : null}
     </div>
   );
 }

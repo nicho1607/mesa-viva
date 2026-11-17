@@ -4,12 +4,16 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AttentionReason, TableStatus } from "@/generated/prisma/client";
-import { ForbiddenError, InvalidTableError, NotFoundError } from "@/lib/domain/errors";
+import { ForbiddenError, InvalidTableError, NotFoundError, OrderClosedError } from "@/lib/domain/errors";
 import { isResponsibleWaiter } from "@/lib/domain/permissions";
+import { PAYMENT_METHODS } from "@/lib/payment-methods";
 
 export const callWaiterInput = z.object({
   token: z.string().min(1).max(128),
   reason: z.enum(["assistance", "bill"]),
+  paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+}).refine(({ reason, paymentMethod }) => reason !== "bill" || paymentMethod !== undefined, {
+  path: ["paymentMethod"],
 });
 export type CallWaiterReason = z.output<typeof callWaiterInput>["reason"];
 
@@ -33,7 +37,7 @@ export type CallWaiterResult = {
  * Lanza `InvalidTableError` si el token no sirve.
  */
 export async function requestWaiter(raw: unknown): Promise<CallWaiterResult> {
-  const { token, reason } = callWaiterInput.parse(raw);
+  const { token, reason, paymentMethod } = callWaiterInput.parse(raw);
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Table" WHERE "publicToken" = ${token} FOR UPDATE`;
     const table = await tx.table.findUnique({
@@ -48,12 +52,17 @@ export async function requestWaiter(raw: unknown): Promise<CallWaiterResult> {
       },
     });
     if (!table || table.status === "INACTIVE") throw new InvalidTableError();
+    const open = table.orders[0];
+    if (reason === "bill" && !open) throw new OrderClosedError();
 
     await tx.table.update({
       where: { id: table.id },
-      data: { status: "NEEDS_ATTENTION", attentionReason: REASON_TO_DB[reason] },
+      data: {
+        status: "NEEDS_ATTENTION",
+        attentionReason: REASON_TO_DB[reason],
+        pendingPaymentMethod: reason === "bill" ? paymentMethod : null,
+      },
     });
-    const open = table.orders[0];
     return {
       tableId: table.id,
       tableNumber: table.number,
@@ -118,7 +127,10 @@ export async function acknowledgeTable(
     if (table.status !== "NEEDS_ATTENTION") {
       return { ...base, status: table.status, changed: false };
     }
-    await tx.table.update({ where: { id: table.id }, data: { status, attentionReason: null } });
+    await tx.table.update({
+      where: { id: table.id },
+      data: { status, attentionReason: null, pendingPaymentMethod: null },
+    });
     return { ...base, status, changed: true };
   });
 }

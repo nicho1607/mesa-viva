@@ -120,10 +120,68 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await waiter.getByRole("link", { name: "Plano de mesas" }).click();
       await waiter.waitForURL(/\/staff$/);
       await floorRealtime;
-      await customer.getByRole("button", { name: "Pedir la cuenta" }).click();
+      const billButton = customer.getByRole("button", { name: "Pedir la cuenta" });
+      const picker = customer.getByRole("dialog", { name: "Método de pago" });
+      const actionURL = `**/m/${table.publicToken}/cuenta`;
+      let submissions = 0;
+      await customer.route(actionURL, async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"]) {
+          submissions += 1;
+          if (submissions === 1) {
+            await route.abort();
+            return;
+          }
+        }
+        await route.continue();
+      });
+
+      await billButton.focus();
+      await billButton.press("Enter");
+      await expect(picker).toBeVisible();
+      for (const option of ["Efectivo", "Tarjeta", "Transferencia", "Pago mixto"]) {
+        await expect(picker.getByRole("button", { name: option, exact: true })).toBeInViewport();
+      }
+      await customer.keyboard.press("Escape");
+      await expect(picker).toBeHidden();
+      await expect(billButton).toBeFocused();
+      expect(submissions).toBe(0);
+      await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Ocupada/);
+
+      await billButton.press("Enter");
+      const mixed = picker.getByRole("button", { name: "Pago mixto", exact: true });
+      await expect(mixed).toBeVisible();
+      await mixed.evaluate((button: HTMLButtonElement) => {
+        button.click();
+        button.click();
+      });
+      const retry = picker.getByRole("button", { name: "Reintentar con Pago mixto" });
+      await expect(retry).toBeVisible();
+      expect(submissions).toBe(1);
+      await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Ocupada/);
+
+      await retry.click();
       await expect(customer.getByText("Te trae la cuenta en un momento.", { exact: false })).toBeVisible();
-      await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Piden la cuenta/);
+      await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Piden la cuenta · Pago mixto/);
       await expect(waiter.getByRole("status").getByText("Mesa 1 pide la cuenta", { exact: true })).toBeVisible();
+      expect(submissions).toBe(2);
+      await customer.unroute(actionURL);
+
+      const floorAfterReload = waitForRealtime(waiter);
+      await waiter.reload();
+      await floorAfterReload;
+      const tile = tableTile(waiter, 1);
+      await expect(tile).toHaveAccessibleName(/Piden la cuenta · Pago mixto/);
+      await tile.locator("..").getByRole("button", { name: "Atendido" }).click();
+      await expect(tile).toHaveAccessibleName(/Ocupada/);
+
+      // Pide otra vez para comprobar que finalizar el servicio también retira el método.
+      const billAfterReload = waitForRealtime(customer);
+      await customer.reload();
+      await billAfterReload;
+      await billButton.click();
+      await picker.getByRole("button", { name: "Tarjeta", exact: true }).press("Enter");
+      await expect(tile).toHaveAccessibleName(/Piden la cuenta · Tarjeta/);
     });
 
     // 7. Finaliza con 10 % de propina → cuenta final; el cliente ve "Servicio finalizado" y el mismo total.
@@ -167,8 +225,11 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await waiter.getByRole("link", { name: "Plano de mesas" }).click();
       await waiter.waitForURL(/\/staff$/);
       await expect(tableTile(waiter, 1)).toHaveAccessibleName(/Libre/);
-      const [t] = await e2eQuery<{ status: string }>(`SELECT status::text AS status FROM "Table" WHERE id = $1`, [table.id]);
-      expect(t.status).toBe("AVAILABLE");
+      const [t] = await e2eQuery<{ status: string; pendingPaymentMethod: string | null }>(
+        `SELECT status::text AS status, "pendingPaymentMethod" FROM "Table" WHERE id = $1`,
+        [table.id],
+      );
+      expect(t).toEqual({ status: "AVAILABLE", pendingPaymentMethod: null });
     });
   } finally {
     await customer.context().close();

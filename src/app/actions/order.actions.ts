@@ -15,6 +15,7 @@ import {
   type TableBillView,
 } from "@/lib/domain/queries";
 import { requestWaiter, type CallWaiterReason } from "@/lib/domain/tables";
+import type { PaymentMethod } from "@/lib/payment-methods";
 import { FLOOR_CHANNEL, waiterChannel } from "@/lib/realtime/events";
 import { publishMany, publishOrderEvent } from "@/lib/realtime/publish";
 import { enforceRateLimit, getRateLimiter } from "@/lib/rate-limit";
@@ -70,10 +71,11 @@ export async function getTableBill(token: string): Promise<ActionResult<TableBil
 export async function callWaiter(
   token: string,
   reason: CallWaiterReason = "assistance",
+  paymentMethod?: PaymentMethod,
 ): Promise<ActionResult<{ tableNumber: number }>> {
   try {
     enforceRateLimit(callWaiterLimiter(), rateKey(token));
-    const r = await requestWaiter({ token, reason });
+    const r = await requestWaiter({ token, reason, paymentMethod });
     const channels = [FLOOR_CHANNEL];
     if (r.waiterId) channels.push(waiterChannel(r.waiterId));
     if (r.assignedWaiterId) channels.push(waiterChannel(r.assignedWaiterId));
