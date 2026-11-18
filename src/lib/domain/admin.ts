@@ -494,6 +494,7 @@ export async function getAdminMenu(actor: Actor) {
           name: true,
           description: true,
           price: true,
+          imageUrl: true,
           available: true,
           sortOrder: true,
           categoryId: true,
