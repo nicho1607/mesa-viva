@@ -60,7 +60,7 @@ export async function requestWaiter(raw: unknown): Promise<CallWaiterResult> {
       data: {
         status: "NEEDS_ATTENTION",
         attentionReason: REASON_TO_DB[reason],
-        pendingPaymentMethod: reason === "bill" ? paymentMethod : null,
+        pendingPaymentMethod: reason === "bill" ? paymentMethod : undefined,
       },
     });
     return {
@@ -129,7 +129,7 @@ export async function acknowledgeTable(
     }
     await tx.table.update({
       where: { id: table.id },
-      data: { status, attentionReason: null, pendingPaymentMethod: null },
+      data: { status, attentionReason: null },
     });
     return { ...base, status, changed: true };
   });

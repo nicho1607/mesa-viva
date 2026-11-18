@@ -16,6 +16,7 @@ import {
 import type { ActionResult } from "@/lib/action-result";
 import type { TableDetailView } from "@/lib/domain/staff-table";
 import { formatMoney } from "@/lib/money";
+import { PAYMENT_METHOD_LABEL } from "@/lib/payment-methods";
 import type { RealtimeEvent, RealtimePayload } from "@/lib/realtime/events";
 import { useRealtimeInvalidate } from "@/lib/realtime/use-channel";
 import { newestFirst, unservedCount } from "@/lib/table-view";
@@ -130,6 +131,9 @@ export function TableDetail({ tableId, initialDetail }: Props) {
 
       {order ? (
         <div className="mt-6 flex flex-col gap-5">
+          {table.pendingPaymentMethod ? (
+            <p className="font-bold">Método solicitado: {PAYMENT_METHOD_LABEL[table.pendingPaymentMethod]}</p>
+          ) : null}
           {order.rounds.length === 0 ? (
             <p className="text-lg text-tinta-suave">La cuenta está abierta pero aún no tiene productos.</p>
           ) : (
@@ -216,6 +220,7 @@ export function TableDetail({ tableId, initialDetail }: Props) {
           orderId={order.id}
           rounds={order.rounds}
           settings={settings}
+          pendingPaymentMethod={table.pendingPaymentMethod}
           unserved={unserved}
           onClosed={() => {
             setSheet(null);

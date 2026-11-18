@@ -175,13 +175,6 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await tile.locator("..").getByRole("button", { name: "Atendido" }).click();
       await expect(tile).toHaveAccessibleName(/Ocupada/);
 
-      // Pide otra vez para comprobar que finalizar el servicio también retira el método.
-      const billAfterReload = waitForRealtime(customer);
-      await customer.reload();
-      await billAfterReload;
-      await billButton.click();
-      await picker.getByRole("button", { name: "Tarjeta", exact: true }).press("Enter");
-      await expect(tile).toHaveAccessibleName(/Piden la cuenta · Tarjeta/);
     });
 
     // 7. Finaliza con 10 % de propina → cuenta final; el cliente ve "Servicio finalizado" y el mismo total.
@@ -190,9 +183,13 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await tableTile(waiter, 1).click();
       await waiter.waitForURL(`**/staff/mesas/${table.id}`);
       await detailRealtime;
-      await expect(waiter.getByText("La mesa pide la cuenta.")).toBeVisible();
+      await expect(waiter.getByText("La mesa pide la cuenta.")).toHaveCount(0);
+      await expect(waiter.getByText("Método solicitado: Pago mixto")).toBeVisible();
       await waiter.getByRole("button", { name: "Finalizar servicio" }).click();
       const dialog = waiter.getByRole("dialog", { name: "Finalizar servicio" });
+      const paymentMethod = dialog.getByLabel("Método de pago usado");
+      await expect(paymentMethod).toHaveValue("MIXED");
+      await paymentMethod.selectOption("CARD");
       await dialog.getByRole("button", { name: "10 %" }).click();
       await expect(dialog.getByRole("button", { name: "10 %" })).toHaveAttribute("aria-pressed", "true");
       await expect(dialog.getByText(/productos? sin servir/)).toHaveCount(0);
@@ -201,6 +198,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
 
       await expect(waiter.getByText("Servicio finalizado. La mesa quedó libre.")).toBeVisible();
       const finalBill = waiter.getByRole("article", { name: "Cuenta, mesa 1" });
+      await expect(finalBill.locator('dt:text-is("Método de pago") ~ dd')).toHaveText("Tarjeta");
       await expect(finalBill.locator('dt:text-is("Subtotal") ~ dd')).toHaveText(cop(subtotal));
       await expect(finalBill.locator('dt:text-is("Propina (10 %)") ~ dd')).toHaveText(cop(tip));
       await expect(finalBill.locator('dt:text-is("Total a pagar") ~ dd')).toHaveText(cop(expectedTotal));
@@ -211,13 +209,13 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(customer.getByRole("button", { name: "Pedir la cuenta" })).toHaveCount(0);
       await customer.screenshot({ path: "test-results/cliente-cuenta-final.png", fullPage: true });
 
-      const bills = await e2eQuery<{ subtotal: number; tipAmount: number; total: number; status: string }>(
-        `SELECT b.subtotal, b."tipAmount", b.total, o.status::text AS status
+      const bills = await e2eQuery<{ subtotal: number; tipAmount: number; total: number; status: string; paymentMethod: string }>(
+        `SELECT b.subtotal, b."tipAmount", b.total, o.status::text AS status, b."paymentMethod"
            FROM "Bill" b JOIN "Order" o ON o.id = b."orderId"
           WHERE o."tableId" = $1`,
         [table.id],
       );
-      expect(bills).toEqual([{ subtotal, tipAmount: tip, total: expectedTotal, status: "CLOSED" }]);
+      expect(bills).toEqual([{ subtotal, tipAmount: tip, total: expectedTotal, status: "CLOSED", paymentMethod: "CARD" }]);
     });
 
     // 8. La mesa vuelve a estar libre en el plano.

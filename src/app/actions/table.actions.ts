@@ -18,6 +18,7 @@ import {
   type TableDetailView,
 } from "@/lib/domain/staff-table";
 import type { OrderMutationResult } from "@/lib/domain/orders";
+import type { PaymentMethod } from "@/lib/payment-methods";
 import { publishOrderEvent } from "@/lib/realtime/publish";
 
 function fail(e: unknown) {
@@ -120,10 +121,11 @@ export async function addItemsForTableAction(
 export async function closeServiceAction(
   orderId: string,
   tipRate: number,
+  paymentMethod: PaymentMethod,
 ): Promise<ActionResult<{ total: number; unservedCount: number }>> {
   try {
     const user = await requireStaff(["WAITER", "CASHIER"]);
-    const r = await staffCloseService(user, { orderId, tipRate });
+    const r = await staffCloseService(user, { orderId, tipRate, paymentMethod });
     await publishOrderEvent({
       tableId: r.tableId,
       waiterId: r.waiterId,

@@ -24,6 +24,7 @@ import type { BillSnapshotLine } from "@/lib/domain/order-rules";
 import { decideTableAction, type TableAction } from "@/lib/domain/permissions";
 import { CLOSED_BILL_WINDOW_MS } from "@/lib/domain/queries";
 import { REASON_FROM_DB, type CallWaiterReason } from "@/lib/domain/tables";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
 
 export type { TableAction } from "@/lib/domain/permissions";
 
@@ -115,6 +116,7 @@ export type ClosedBillView = {
   total: number;
   taxRate: number;
   tipRate: number;
+  paymentMethod: PaymentMethod | null;
   lines: BillSnapshotLine[];
 };
 
@@ -126,6 +128,7 @@ export type TableDetailView = {
     zoneName: string;
     status: TableStatus;
     attentionReason: CallWaiterReason | null;
+    pendingPaymentMethod: PaymentMethod | null;
   };
   /** Orden OPEN (rondas en orden ascendente; la UI decide el orden de pintado). */
   order: {
@@ -160,6 +163,7 @@ export async function getTableDetailForStaff(
         seats: true,
         status: true,
         attentionReason: true,
+        pendingPaymentMethod: true,
         zone: { select: { name: true } },
         orders: {
           where: { status: "OPEN" },
@@ -241,6 +245,7 @@ export async function getTableDetailForStaff(
         total: b.total,
         taxRate: Number(b.taxRate),
         tipRate: Number(b.tipRate),
+        paymentMethod: b.paymentMethod,
         lines: b.lines as unknown as BillSnapshotLine[],
       };
     }
@@ -255,6 +260,7 @@ export async function getTableDetailForStaff(
       status: table.status,
       attentionReason:
         table.status === "NEEDS_ATTENTION" && table.attentionReason ? REASON_FROM_DB[table.attentionReason] : null,
+      pendingPaymentMethod: open ? table.pendingPaymentMethod : null,
     },
     order,
     totals,
@@ -277,6 +283,7 @@ const staffAddInput = z.object({ tableId: z.uuid(), items: orderItemsInput });
 /** Propina como fracción (0.1 = 10 %), máx. 100 %, redondeada a 4 decimales (Decimal(5,4)). */
 const closeInput = z.object({
   orderId: z.uuid(),
+  paymentMethod: z.enum(PAYMENT_METHODS),
   tipRate: z
     .number()
     .min(0)
@@ -315,7 +322,7 @@ export async function staffAddItems(user: StaffActor, raw: unknown): Promise<Add
 }
 
 export async function staffCloseService(user: StaffActor, raw: unknown): Promise<CloseOrderResult> {
-  const { orderId, tipRate } = closeInput.parse(raw);
+  const { orderId, tipRate, paymentMethod } = closeInput.parse(raw);
   await assertCanActOnOrder(user, orderId, "close");
-  return closeOrder(orderId, user.id, { tipRate });
+  return closeOrder(orderId, user.id, { tipRate, paymentMethod });
 }

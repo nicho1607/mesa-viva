@@ -9,6 +9,7 @@ import { Sheet } from "@/components/customer/Sheet";
 import { computeBill } from "@/lib/domain/billing";
 import type { StaffRoundView, TableDetailView } from "@/lib/domain/staff-table";
 import { formatMoney } from "@/lib/money";
+import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
 import { parseTipPercent, percentLabel } from "@/lib/table-view";
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
   orderId: string;
   rounds: StaffRoundView[];
   settings: TableDetailView["settings"];
+  pendingPaymentMethod: PaymentMethod | null;
   unserved: number;
   onClosed: () => void;
 };
@@ -32,12 +34,13 @@ export function CloseServiceSheet(props: Props) {
   );
 }
 
-function CloseForm({ orderId, rounds, settings, unserved, onClosed }: Props) {
+function CloseForm({ orderId, rounds, settings, pendingPaymentMethod, unserved, onClosed }: Props) {
   const customId = useId();
   const defaultIsPreset = PRESETS.includes(settings.tipRate);
   const [mode, setMode] = useState<number | "custom">(defaultIsPreset ? settings.tipRate : "custom");
   const [custom, setCustom] = useState(defaultIsPreset ? "" : percentLabel(settings.tipRate));
   const [sending, setSending] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">(pendingPaymentMethod ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const tipRate = mode === "custom" ? parseTipPercent(custom) : mode;
@@ -49,10 +52,10 @@ function CloseForm({ orderId, rounds, settings, unserved, onClosed }: Props) {
   const taxPct = percentLabel(settings.taxRate);
 
   async function submit() {
-    if (tipRate === null) return;
+    if (tipRate === null || !paymentMethod) return;
     setSending(true);
     setError(null);
-    const r = await closeServiceAction(orderId, tipRate);
+    const r = await closeServiceAction(orderId, tipRate, paymentMethod);
     setSending(false);
     if (!r.ok) return setError(r.error);
     onClosed();
@@ -66,6 +69,22 @@ function CloseForm({ orderId, rounds, settings, unserved, onClosed }: Props) {
           <span className="font-normal">Se cobrarán igual; cancélalos antes si no se van a servir.</span>
         </p>
       ) : null}
+
+      <label className="grid gap-1 font-bold">
+        Método de pago usado
+        <select
+          required
+          value={paymentMethod}
+          disabled={sending}
+          onChange={(e) => setPaymentMethod(PAYMENT_METHODS.find((method) => method === e.target.value) ?? "")}
+          className="min-h-11 rounded-lg border border-tinta/30 bg-white px-3"
+        >
+          <option value="">Elige un método</option>
+          {PAYMENT_METHODS.map((method) => (
+            <option key={method} value={method}>{PAYMENT_METHOD_LABEL[method]}</option>
+          ))}
+        </select>
+      </label>
 
       <fieldset>
         <legend className="font-bold">Propina</legend>
@@ -143,7 +162,7 @@ function CloseForm({ orderId, rounds, settings, unserved, onClosed }: Props) {
 
       <button
         type="button"
-        disabled={sending || tipRate === null}
+        disabled={sending || tipRate === null || !paymentMethod}
         onClick={() => void submit()}
         className="flex min-h-13 w-full items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-tinta/90 disabled:bg-tinta/40"
       >

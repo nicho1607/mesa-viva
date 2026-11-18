@@ -114,7 +114,7 @@ describe("serveRound", () => {
     await expect(staffServeRound(u.ana, { orderId: order.id, round: 1 })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(staffConfirmRound(u.ana, { orderId: order.id, round: 2 })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(staffConfirmRound(u.beto, { orderId: order.id, round: 2 })).resolves.toMatchObject({ count: 1 });
-    await staffCloseService(u.beto, { orderId: order.id, tipRate: 0 });
+    await staffCloseService(u.beto, { orderId: order.id, tipRate: 0, paymentMethod: "CASH" });
     await expect(serveRound(order.id, 2)).rejects.toBeInstanceOf(OrderClosedError);
   });
 });
@@ -156,10 +156,12 @@ describe("getTableDetailForStaff + cierre con propina", () => {
 
   it("caja cierra con propina 15 %: Bill, mesa libre y la cuenta cerrada aparece en el detalle", async () => {
     const { order } = await getTableDetailForStaff(u.caja, f.t3);
-    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 1.5 })).rejects.toBeInstanceOf(ZodError);
-    await expect(staffCloseService(u.beto, { orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 1.5, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ZodError);
+    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(ZodError);
+    await expect(staffCloseService(u.beto, { orderId: order!.id, tipRate: 0.1, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ForbiddenError);
 
-    const r = await staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.15 });
+    const r = await staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.15, paymentMethod: "CARD" });
+    expect(r.bill.paymentMethod).toBe("CARD");
     expect(r.unservedCount).toBe(1); // el ajiaco sigue en cocina
     expect(Number(r.bill.tipRate)).toBe(0.15);
     expect(r.bill.subtotal).toBe(60_000_00);
@@ -175,6 +177,6 @@ describe("getTableDetailForStaff + cierre con propina", () => {
     // Más de 2 h después ya no se muestra
     const later = await getTableDetailForStaff(u.ana, f.t3, new Date(Date.now() + 3 * 60 * 60 * 1000));
     expect(later.closedBill).toBeNull();
-    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1, paymentMethod: "CASH" })).rejects.toBeInstanceOf(OrderClosedError);
   });
 });

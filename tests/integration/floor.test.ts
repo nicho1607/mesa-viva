@@ -161,7 +161,7 @@ describe("motivo de la llamada + acknowledgeTable", () => {
     const r = await acknowledgeTable({ tableId: f.t1.id }, { id: f.ana, role: "WAITER" });
     expect(r).toMatchObject({ status: "OCCUPIED", changed: true, tableNumber: f.t1.number, waiterId: f.ana });
     row = await db.table.findUniqueOrThrow({ where: { id: f.t1.id } });
-    expect(row).toMatchObject({ status: "OCCUPIED", attentionReason: null, pendingPaymentMethod: null });
+    expect(row).toMatchObject({ status: "OCCUPIED", attentionReason: null, pendingPaymentMethod: "MIXED" });
     t = mine(await getFloorForStaff({ id: f.ana, role: "WAITER" })).find((x) => x.id === f.t1.id)!;
     expect(t.attentionReason).toBeNull();
 

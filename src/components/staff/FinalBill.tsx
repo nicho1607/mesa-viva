@@ -4,6 +4,7 @@
 
 import type { ClosedBillView } from "@/lib/domain/staff-table";
 import { formatMoney } from "@/lib/money";
+import { PAYMENT_METHOD_LABEL } from "@/lib/payment-methods";
 import { formatClock, percentLabel } from "@/lib/table-view";
 
 type Props = { bill: ClosedBillView; tableNumber: number; zoneName: string; currency: string; pricesIncludeTax: boolean };
@@ -51,6 +52,7 @@ export function FinalBill({ bill, tableNumber, zoneName, currency, pricesInclude
             <Row label={`IVA (${percentLabel(bill.taxRate)} %)`} value={money(bill.taxAmount)} />
           )}
           <Row label={`Propina (${percentLabel(bill.tipRate)} %)`} value={money(bill.tipAmount)} />
+          {bill.paymentMethod ? <Row label="Método de pago" value={PAYMENT_METHOD_LABEL[bill.paymentMethod]} /> : null}
           <div className="mt-2 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-2">
             <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total a pagar</dt>
             <dd className="font-display text-4xl leading-none font-semibold tracking-tight">{money(bill.total)}</dd>

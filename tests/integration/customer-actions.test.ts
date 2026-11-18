@@ -233,9 +233,9 @@ describe("getTableBill", () => {
     expect(d.order!.status).toBe("OPEN");
     expect(d.order!.version).toBe(3);
     expect(d.order!.rounds.map((r) => r.round)).toEqual([1, 2]);
-    expect(d.order!.rounds[0].items.map((i) => [i.productName, i.quantity, i.status])).toEqual([
-      ["Hamburguesa", 2, "PENDING"],
+    expect(d.order!.rounds[0].items.map((i) => [i.productName, i.quantity, i.status]).sort()).toEqual([
       ["Gaseosa", 1, "CANCELLED"],
+      ["Hamburguesa", 2, "PENDING"],
     ]);
     expect(d.order!.rounds[1].items).toEqual([
       expect.objectContaining({ productName: "Gaseosa", unitPrice: f.soda.price, quantity: 3, notes: "Sin hielo", status: "PENDING" }),
@@ -319,7 +319,7 @@ describe("callWaiter", () => {
     });
   });
 
-  it.each(PAYMENT_METHODS)("guarda %s para el aviso de cuenta y lo borra al pedir asistencia", async (method) => {
+  it.each(PAYMENT_METHODS)("guarda %s para el aviso de cuenta y lo conserva al pedir asistencia", async (method) => {
     const t = await newTable();
     expect((await submitOrder(t.publicToken, [{ productId: f.soda.id, quantity: 1 }])).ok).toBe(true);
     expect((await callWaiter(t.publicToken, "bill", method)).ok).toBe(true);
@@ -331,7 +331,7 @@ describe("callWaiter", () => {
     expect((await callWaiter(t.publicToken, "assistance")).ok).toBe(true);
     expect(await db.table.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({
       attentionReason: "ASSISTANCE",
-      pendingPaymentMethod: null,
+      pendingPaymentMethod: method,
     });
   });
 

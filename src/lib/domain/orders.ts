@@ -20,6 +20,7 @@ import {
   UnavailableProductsError,
 } from "@/lib/domain/errors";
 import { canTransitionItem, groupBillLines } from "@/lib/domain/order-rules";
+import type { PaymentMethod } from "@/lib/payment-methods";
 
 type Tx = Prisma.TransactionClient;
 
@@ -240,7 +241,7 @@ export function cancelItem(itemId: string): Promise<ItemMutationResult> {
 export async function closeOrder(
   orderId: string,
   staffUserId: string,
-  opts: { tipRate?: number } = {},
+  opts: { tipRate?: number; paymentMethod?: PaymentMethod } = {},
 ): Promise<CloseOrderResult> {
   if (opts.tipRate !== undefined && !(Number.isFinite(opts.tipRate) && opts.tipRate >= 0 && opts.tipRate <= 1)) {
     throw new RangeError("tipRate debe estar entre 0 y 1");
@@ -267,6 +268,7 @@ export async function closeOrder(
         ...totals,
         taxRate: settings.taxRate,
         tipRate,
+        paymentMethod: opts.paymentMethod,
         lines: groupBillLines(items),
         closedById: staffUserId,
       },

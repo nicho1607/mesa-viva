@@ -146,6 +146,7 @@ model OrderItem {
 }
 
 model Bill {
+  paymentMethod PaymentMethod?
   id         String   @id @default(uuid())
   orderId    String   @unique
   order      Order    @relation(fields: [orderId], references: [id])
