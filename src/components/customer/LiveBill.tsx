@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getTableBill } from "@/app/actions/order.actions";
 import type { BillItemView, BillRoundView, TableBillView } from "@/lib/domain/queries";
+import { PAYMENT_METHOD_LABEL } from "@/lib/payment-methods";
 import { CUSTOMER_STATUS_LABEL, type CustomerStatus } from "@/lib/domain/order-status";
 import { formatMoney } from "@/lib/money";
 import { useRealtimeInvalidate } from "@/lib/realtime/use-channel";
@@ -164,7 +165,7 @@ function Teeth({ image }: { image: string }) {
 }
 
 function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: number[]; reconnecting: boolean }) {
-  const { order, totals, customerStatus, currency } = bill;
+  const { order, totals, customerStatus, currency, paymentMethod } = bill;
   const closed = customerStatus === "CLOSED";
   const money = (c: number) => formatMoney(c, currency);
   const taxPct = Math.round(totals.taxRate * 100);
@@ -201,6 +202,7 @@ function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: num
             <TotalRow label={`IVA (${taxPct}%)`} value={money(totals.taxAmount)} />
           )}
           <TotalRow label={`Propina sugerida (${tipPct}%)`} value={money(totals.tipAmount)} />
+          {paymentMethod ? <TotalRow label="Método de pago" value={PAYMENT_METHOD_LABEL[paymentMethod]} /> : null}
           <div className="mt-3 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-3">
             <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total</dt>
             <dd className="font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums">

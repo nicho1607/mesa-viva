@@ -259,16 +259,17 @@ describe("getTableBill", () => {
     expect(JSON.stringify(d)).not.toContain(f.waiterId);
   });
 
-  it("tras cerrar: muestra la cuenta final (Bill) durante 2 h; después, order null", async () => {
+  it.each(["CARD", null] as const)("tras cerrar con método %s muestra el Bill durante 2 h", async (paymentMethod) => {
     const t = await newTable();
     const r = await submitOrder(t.publicToken, [{ productId: f.burger.id, quantity: 1 }]);
     if (!r.ok) throw new Error("submit falló");
-    const closed = await closeOrder(r.data.orderId, f.staffId, { tipRate: 0 });
+    const closed = await closeOrder(r.data.orderId, f.staffId, { tipRate: 0, paymentMethod: paymentMethod ?? undefined });
 
     const res = await getTableBill(t.publicToken);
     if (!res.ok || !("totals" in res.data)) throw new Error("se esperaba la cuenta cerrada");
     expect(res.data.order.status).toBe("CLOSED");
     expect(res.data.customerStatus).toBe("CLOSED");
+    expect(res.data.paymentMethod).toBe(paymentMethod);
     expect(res.data.totals).toMatchObject({
       subtotal: closed.bill.subtotal,
       tipAmount: 0,

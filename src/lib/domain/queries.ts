@@ -6,6 +6,7 @@ import type { ItemStatus, OrderStatus, TableStatus } from "@/generated/prisma/cl
 import { computeBill, parseBillingSettings, type BillTotals } from "@/lib/domain/billing";
 import { InvalidTableError } from "@/lib/domain/errors";
 import { deriveCustomerStatus, type CustomerStatus } from "@/lib/domain/order-status";
+import type { PaymentMethod } from "@/lib/payment-methods";
 
 /** Ventana en la que el cliente todavía ve la cuenta de una orden cerrada. */
 export const CLOSED_BILL_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -82,6 +83,7 @@ export type TableBillView =
       table: { number: number };
       order: { id: string; status: OrderStatus; version: number; rounds: BillRoundView[] };
       totals: BillTotalsView;
+      paymentMethod: PaymentMethod | null;
       customerStatus: CustomerStatus;
       currency: string;
     };
@@ -166,6 +168,7 @@ export async function getTableBillData(token: unknown, now: Date = new Date()): 
     table: tableView,
     order: { id: order.id, status: order.status, version: order.version, rounds: groupByRound(order.items) },
     totals,
+    paymentMethod: order.status === "CLOSED" ? order.bill?.paymentMethod ?? null : null,
     customerStatus: deriveCustomerStatus(
       order.status,
       order.items.map((i) => i.status),

@@ -189,6 +189,8 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       const dialog = waiter.getByRole("dialog", { name: "Finalizar servicio" });
       const paymentMethod = dialog.getByLabel("Método de pago usado");
       await expect(paymentMethod).toHaveValue("MIXED");
+      const customerMethod = customer.locator('dt:text-is("Método de pago") ~ dd');
+      await expect(customerMethod).toHaveCount(0);
       await paymentMethod.selectOption("CARD");
       await dialog.getByRole("button", { name: "10 %" }).click();
       await expect(dialog.getByRole("button", { name: "10 %" })).toHaveAttribute("aria-pressed", "true");
@@ -205,6 +207,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(finalBill.getByText("Sin cebolla")).toBeVisible();
 
       await expect(customer.getByText("Servicio finalizado", { exact: true })).toBeVisible();
+      await expect(customerMethod).toHaveText("Tarjeta");
       await expect(customer.locator('dt:text-is("Total") ~ dd')).toHaveText(cop(expectedTotal));
       await expect(customer.getByRole("button", { name: "Pedir la cuenta" })).toHaveCount(0);
       await customer.screenshot({ path: "test-results/cliente-cuenta-final.png", fullPage: true });
