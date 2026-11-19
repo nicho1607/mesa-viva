@@ -14,9 +14,10 @@ type Props = {
   subtitle?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  mobileTop?: boolean;
 };
 
-export function Sheet({ open, onClose, title, subtitle, children, footer }: Props) {
+export function Sheet({ open, onClose, title, subtitle, children, footer, mobileTop = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -44,6 +45,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
         if (viewport.scale !== 1) {
           dialog.style.removeProperty("--mv-sheet-bottom");
           dialog.style.removeProperty("--mv-sheet-height");
+          dialog.style.removeProperty("--mv-sheet-top");
           return;
         }
 
@@ -51,6 +53,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
         const bottom = Math.max(0, document.documentElement.clientHeight - viewport.height - viewport.offsetTop);
         dialog.style.setProperty("--mv-sheet-bottom", `${bottom}px`);
         dialog.style.setProperty("--mv-sheet-height", `${viewport.height}px`);
+        dialog.style.setProperty("--mv-sheet-top", `${viewport.offsetTop}px`);
 
         const field = document.activeElement;
         if (!(field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement)
@@ -79,6 +82,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
       dialog.removeEventListener("focusout", syncViewport);
       dialog.style.removeProperty("--mv-sheet-bottom");
       dialog.style.removeProperty("--mv-sheet-height");
+      dialog.style.removeProperty("--mv-sheet-top");
     };
   }, [open]);
 
@@ -97,7 +101,11 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="mv-sheet fixed inset-x-0 top-auto bottom-[var(--mv-sheet-bottom,0px)] m-0 mx-auto hidden max-h-[min(92dvh,var(--mv-sheet-height,92dvh))] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex"
+      className={`mv-sheet fixed inset-x-0 m-0 mx-auto hidden w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex ${
+        mobileTop
+          ? "mv-sheet-mobile-top top-[calc(var(--mv-sheet-top,0px)+1rem)] bottom-auto max-h-[min(92dvh,calc(var(--mv-sheet-height,100dvh)-2rem))] max-sm:w-[calc(100%-2rem)] max-sm:rounded-2xl sm:top-auto sm:bottom-[var(--mv-sheet-bottom,0px)]"
+          : "top-auto bottom-[var(--mv-sheet-bottom,0px)] max-h-[min(92dvh,var(--mv-sheet-height,92dvh))]"
+      }`}
     >
       <div className="flex items-start gap-3 border-b border-tinta/10 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">

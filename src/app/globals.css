@@ -43,6 +43,11 @@ html:has(dialog[open]) {
   .mv-sheet[open] {
     animation: mv-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  @media (width < 40rem) {
+    .mv-sheet-mobile-top[open] {
+      animation: none;
+    }
+  }
   .mv-sheet[open]::backdrop {
     animation: mv-fade-in 220ms ease-out;
   }

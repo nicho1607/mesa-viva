@@ -26,6 +26,7 @@ function DishForm({ product, onClose, onAdd }: Omit<Props, "product"> & { produc
   return (
     <Sheet
       open
+      mobileTop
       onClose={onClose}
       title={product.name}
       subtitle={product.description ?? undefined}
