@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { PrintButton } from "@/components/admin/PrintButton";
+import { TableLinkActions } from "@/components/admin/TableLinkActions";
 import { sectionTitle } from "@/components/admin/styles";
 import { requireAdminPage } from "@/lib/auth";
-import { getQrTables } from "@/lib/domain/admin";
+import { getQrTables, tablePublicUrl } from "@/lib/domain/admin";
 
 export const metadata: Metadata = { title: "Códigos QR · Administración · Mesa Viva" };
 
@@ -44,6 +45,10 @@ export default async function AdminQrPage() {
               />
               <p className="max-w-[24ch] font-bold">Escanea para ver el menú y pedir</p>
               <p className="text-sm text-tinta-suave">{t.zone.name}</p>
+              <TableLinkActions
+                tableNumber={t.number}
+                href={tablePublicUrl(process.env.PUBLIC_BASE_URL?.trim() || "", t.publicToken)}
+              />
             </li>
           ))}
         </ul>

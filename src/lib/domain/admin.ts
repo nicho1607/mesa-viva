@@ -581,7 +581,7 @@ export async function getQrTables(actor: Actor) {
   return db.table.findMany({
     where: { status: { not: "INACTIVE" } },
     orderBy: { number: "asc" },
-    select: { id: true, number: true, zone: { select: { name: true } } },
+    select: { id: true, number: true, publicToken: true, zone: { select: { name: true } } },
   });
 }
 
