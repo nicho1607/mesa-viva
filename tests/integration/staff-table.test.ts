@@ -158,10 +158,21 @@ describe("getTableDetailForStaff + cierre con propina", () => {
     const { order } = await getTableDetailForStaff(u.caja, f.t3);
     await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 1.5, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ZodError);
     await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(ZodError);
+    await expect(staffCloseService(u.caja, {
+      orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(staffCloseService(u.caja, {
+      orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
+      mixedPayment: { transferAmount: 100, cashAmount: 100 },
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await getTableDetailForStaff(u.caja, f.t3)).order?.id).toBe(order!.id);
     await expect(staffCloseService(u.beto, { orderId: order!.id, tipRate: 0.1, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ForbiddenError);
 
-    const r = await staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.15, paymentMethod: "CARD" });
-    expect(r.bill.paymentMethod).toBe("CARD");
+    const r = await staffCloseService(u.caja, {
+      orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
+      mixedPayment: { transferAmount: 4_000_000, cashAmount: 2_900_000 },
+    });
+    expect(r.bill).toMatchObject({ paymentMethod: "MIXED", transferAmount: 4_000_000, cashAmount: 2_900_000 });
     expect(r.unservedCount).toBe(1); // el ajiaco sigue en cocina
     expect(Number(r.bill.tipRate)).toBe(0.15);
     expect(r.bill.subtotal).toBe(60_000_00);
@@ -170,6 +181,7 @@ describe("getTableDetailForStaff + cierre con propina", () => {
 
     const d = await getTableDetailForStaff(u.ana, f.t3);
     expect(d.table.status).toBe("AVAILABLE");
+    expect(d.closedBill).toMatchObject({ transferAmount: 4_000_000, cashAmount: 2_900_000 });
     expect(d.order).toBeNull();
     expect(d.closedBill).toMatchObject({ orderId: order!.id, tipRate: 0.15, tipAmount: 9_000_00, closedByName: `caja-${tag}` });
     expect(d.closedBill!.lines).toEqual([expect.objectContaining({ productName: "Ajiaco", quantity: 2, notes: "Sin cebolla" })]);

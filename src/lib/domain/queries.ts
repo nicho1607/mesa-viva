@@ -84,6 +84,8 @@ export type TableBillView =
       order: { id: string; status: OrderStatus; version: number; rounds: BillRoundView[] };
       totals: BillTotalsView;
       paymentMethod: PaymentMethod | null;
+      transferAmount: number | null;
+      cashAmount: number | null;
       customerStatus: CustomerStatus;
       currency: string;
     };
@@ -169,6 +171,8 @@ export async function getTableBillData(token: unknown, now: Date = new Date()): 
     order: { id: order.id, status: order.status, version: order.version, rounds: groupByRound(order.items) },
     totals,
     paymentMethod: order.status === "CLOSED" ? order.bill?.paymentMethod ?? null : null,
+    transferAmount: order.status === "CLOSED" ? order.bill?.transferAmount ?? null : null,
+    cashAmount: order.status === "CLOSED" ? order.bill?.cashAmount ?? null : null,
     customerStatus: deriveCustomerStatus(
       order.status,
       order.items.map((i) => i.status),

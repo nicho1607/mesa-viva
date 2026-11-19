@@ -117,6 +117,8 @@ export type ClosedBillView = {
   taxRate: number;
   tipRate: number;
   paymentMethod: PaymentMethod | null;
+  transferAmount: number | null;
+  cashAmount: number | null;
   lines: BillSnapshotLine[];
 };
 
@@ -246,6 +248,8 @@ export async function getTableDetailForStaff(
         taxRate: Number(b.taxRate),
         tipRate: Number(b.tipRate),
         paymentMethod: b.paymentMethod,
+        transferAmount: b.transferAmount,
+        cashAmount: b.cashAmount,
         lines: b.lines as unknown as BillSnapshotLine[],
       };
     }
@@ -284,6 +288,10 @@ const staffAddInput = z.object({ tableId: z.uuid(), items: orderItemsInput });
 const closeInput = z.object({
   orderId: z.uuid(),
   paymentMethod: z.enum(PAYMENT_METHODS),
+  mixedPayment: z.object({
+    transferAmount: z.number().int().min(0).max(2_147_483_647),
+    cashAmount: z.number().int().min(0).max(2_147_483_647),
+  }).optional(),
   tipRate: z
     .number()
     .min(0)
@@ -322,7 +330,7 @@ export async function staffAddItems(user: StaffActor, raw: unknown): Promise<Add
 }
 
 export async function staffCloseService(user: StaffActor, raw: unknown): Promise<CloseOrderResult> {
-  const { orderId, tipRate, paymentMethod } = closeInput.parse(raw);
+  const { orderId, tipRate, paymentMethod, mixedPayment } = closeInput.parse(raw);
   await assertCanActOnOrder(user, orderId, "close");
-  return closeOrder(orderId, user.id, { tipRate, paymentMethod });
+  return closeOrder(orderId, user.id, { tipRate, paymentMethod, mixedPayment });
 }

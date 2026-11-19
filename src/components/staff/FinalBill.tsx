@@ -53,6 +53,12 @@ export function FinalBill({ bill, tableNumber, zoneName, currency, pricesInclude
           )}
           <Row label={`Propina (${percentLabel(bill.tipRate)} %)`} value={money(bill.tipAmount)} />
           {bill.paymentMethod ? <Row label="Método de pago" value={PAYMENT_METHOD_LABEL[bill.paymentMethod]} /> : null}
+          {bill.paymentMethod === "MIXED" && bill.transferAmount !== null && bill.cashAmount !== null ? (
+            <>
+              <Row label="Transferencia" value={money(bill.transferAmount)} />
+              <Row label="Efectivo" value={money(bill.cashAmount)} />
+            </>
+          ) : null}
           <div className="mt-2 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-2">
             <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total a pagar</dt>
             <dd className="font-display text-4xl leading-none font-semibold tracking-tight">{money(bill.total)}</dd>

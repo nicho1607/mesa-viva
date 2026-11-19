@@ -203,6 +203,12 @@ function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: num
           )}
           <TotalRow label={`Propina sugerida (${tipPct}%)`} value={money(totals.tipAmount)} />
           {paymentMethod ? <TotalRow label="Método de pago" value={PAYMENT_METHOD_LABEL[paymentMethod]} /> : null}
+          {paymentMethod === "MIXED" && bill.transferAmount !== null && bill.cashAmount !== null ? (
+            <>
+              <TotalRow label="Transferencia" value={money(bill.transferAmount)} />
+              <TotalRow label="Efectivo" value={money(bill.cashAmount)} />
+            </>
+          ) : null}
           <div className="mt-3 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-3">
             <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total</dt>
             <dd className="font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums">

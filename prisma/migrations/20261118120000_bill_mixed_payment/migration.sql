@@ -1,0 +1,3 @@
+ALTER TABLE "Bill"
+ADD COLUMN "transferAmount" INTEGER,
+ADD COLUMN "cashAmount" INTEGER;

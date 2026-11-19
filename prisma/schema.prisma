@@ -146,6 +146,8 @@ model OrderItem {
 }
 
 model Bill {
+  transferAmount Int?
+  cashAmount Int?
   paymentMethod PaymentMethod?
   id         String   @id @default(uuid())
   orderId    String   @unique

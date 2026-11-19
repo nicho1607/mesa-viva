@@ -9,7 +9,7 @@ import { Sheet } from "@/components/customer/Sheet";
 import { computeBill } from "@/lib/domain/billing";
 import type { StaffRoundView, TableDetailView } from "@/lib/domain/staff-table";
 import { formatMoney } from "@/lib/money";
-import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
+import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, parsePaymentAmount, type PaymentMethod } from "@/lib/payment-methods";
 import { parseTipPercent, percentLabel } from "@/lib/table-view";
 
 type Props = {
@@ -41,6 +41,8 @@ function CloseForm({ orderId, rounds, settings, pendingPaymentMethod, unserved, 
   const [custom, setCustom] = useState(defaultIsPreset ? "" : percentLabel(settings.tipRate));
   const [sending, setSending] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">(pendingPaymentMethod ?? "");
+  const [transfer, setTransfer] = useState("");
+  const [cash, setCash] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const tipRate = mode === "custom" ? parseTipPercent(custom) : mode;
@@ -50,12 +52,18 @@ function CloseForm({ orderId, rounds, settings, pendingPaymentMethod, unserved, 
   );
   const money = (c: number) => formatMoney(c, settings.currency);
   const taxPct = percentLabel(settings.taxRate);
+  const transferAmount = parsePaymentAmount(transfer);
+  const cashAmount = parsePaymentAmount(cash);
+  const splitValid = paymentMethod !== "MIXED" || (transferAmount !== null && cashAmount !== null
+    && transferAmount + cashAmount === totals.total);
 
   async function submit() {
-    if (tipRate === null || !paymentMethod) return;
+    if (sending || tipRate === null || !paymentMethod || !splitValid) return;
     setSending(true);
     setError(null);
-    const r = await closeServiceAction(orderId, tipRate, paymentMethod);
+    const mixedPayment = paymentMethod === "MIXED" && transferAmount !== null && cashAmount !== null
+      ? { transferAmount, cashAmount } : undefined;
+    const r = await closeServiceAction(orderId, tipRate, paymentMethod, mixedPayment);
     setSending(false);
     if (!r.ok) return setError(r.error);
     onClosed();
@@ -85,6 +93,38 @@ function CloseForm({ orderId, rounds, settings, pendingPaymentMethod, unserved, 
           ))}
         </select>
       </label>
+
+      {paymentMethod === "MIXED" ? (
+        <fieldset className="grid gap-3" disabled={sending}>
+          <legend className="mb-2 font-bold">Distribución del pago mixto</legend>
+          <p id={`${customId}-split-help`} className="text-tinta-suave">
+            Escribe los importes en pesos, sin separador de miles. Deben sumar el total con propina.
+          </p>
+          <label className="grid gap-1 font-bold">
+            Transferencia
+            <input
+              inputMode="decimal"
+              value={transfer}
+              onChange={(e) => setTransfer(e.target.value)}
+              aria-describedby={`${customId}-split-help ${customId}-split-status`}
+              className="min-h-12 rounded-lg border border-tinta/30 bg-plato px-3 text-base tabular-nums"
+            />
+          </label>
+          <label className="grid gap-1 font-bold">
+            Efectivo
+            <input
+              inputMode="decimal"
+              value={cash}
+              onChange={(e) => setCash(e.target.value)}
+              aria-describedby={`${customId}-split-help ${customId}-split-status`}
+              className="min-h-12 rounded-lg border border-tinta/30 bg-plato px-3 text-base tabular-nums"
+            />
+          </label>
+          <p id={`${customId}-split-status`} role="status" className={splitValid ? "text-albahaca" : "text-guindilla"}>
+            {splitValid ? "Los importes coinciden con el total." : `La transferencia y el efectivo deben sumar ${money(totals.total)}.`}
+          </p>
+        </fieldset>
+      ) : null}
 
       <fieldset>
         <legend className="font-bold">Propina</legend>
@@ -162,7 +202,7 @@ function CloseForm({ orderId, rounds, settings, pendingPaymentMethod, unserved, 
 
       <button
         type="button"
-        disabled={sending || tipRate === null || !paymentMethod}
+        disabled={sending || tipRate === null || !paymentMethod || !splitValid}
         onClick={() => void submit()}
         className="flex min-h-13 w-full items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-tinta/90 disabled:bg-tinta/40"
       >

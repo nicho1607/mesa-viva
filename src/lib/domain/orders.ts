@@ -13,6 +13,7 @@ import { Prisma } from "@/generated/prisma/client";
 import type { Bill, ItemStatus } from "@/generated/prisma/client";
 import { computeBill, parseBillingSettings } from "@/lib/domain/billing";
 import {
+  ConflictError,
   InvalidTableError,
   InvalidTransitionError,
   NotFoundError,
@@ -20,7 +21,7 @@ import {
   UnavailableProductsError,
 } from "@/lib/domain/errors";
 import { canTransitionItem, groupBillLines } from "@/lib/domain/order-rules";
-import type { PaymentMethod } from "@/lib/payment-methods";
+import type { MixedPayment, PaymentMethod } from "@/lib/payment-methods";
 
 type Tx = Prisma.TransactionClient;
 
@@ -241,7 +242,7 @@ export function cancelItem(itemId: string): Promise<ItemMutationResult> {
 export async function closeOrder(
   orderId: string,
   staffUserId: string,
-  opts: { tipRate?: number; paymentMethod?: PaymentMethod } = {},
+  opts: { tipRate?: number; paymentMethod?: PaymentMethod; mixedPayment?: MixedPayment } = {},
 ): Promise<CloseOrderResult> {
   if (opts.tipRate !== undefined && !(Number.isFinite(opts.tipRate) && opts.tipRate >= 0 && opts.tipRate <= 1)) {
     throw new RangeError("tipRate debe estar entre 0 y 1");
@@ -262,6 +263,15 @@ export async function closeOrder(
       pricesIncludeTax: settings.pricesIncludeTax,
     });
 
+    const split = opts.paymentMethod === "MIXED" ? opts.mixedPayment : undefined;
+    if (opts.paymentMethod === "MIXED" && (!split
+      || !Number.isInteger(split.transferAmount) || split.transferAmount < 0
+      || !Number.isInteger(split.cashAmount) || split.cashAmount < 0
+      || split.transferAmount > 2_147_483_647 || split.cashAmount > 2_147_483_647
+      || split.transferAmount + split.cashAmount !== totals.total)) {
+      throw new ConflictError("La transferencia y el efectivo deben sumar el total de la cuenta.");
+    }
+
     const bill = await tx.bill.create({
       data: {
         orderId,
@@ -269,6 +279,8 @@ export async function closeOrder(
         taxRate: settings.taxRate,
         tipRate,
         paymentMethod: opts.paymentMethod,
+        transferAmount: split?.transferAmount,
+        cashAmount: split?.cashAmount,
         lines: groupBillLines(items),
         closedById: staffUserId,
       },
