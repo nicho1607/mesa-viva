@@ -19,6 +19,7 @@ import type { PaymentMethod } from "@/lib/payment-methods";
 import { FLOOR_CHANNEL, waiterChannel } from "@/lib/realtime/events";
 import { publishMany, publishOrderEvent } from "@/lib/realtime/publish";
 import { enforceRateLimit, getRateLimiter } from "@/lib/rate-limit";
+import { withBillDrafts, withMenuDrafts } from "@/lib/i18n/menu-preview";
 
 const MINUTE = 60_000;
 const submitLimiter = () => getRateLimiter("submitOrder", { limit: 10, windowMs: MINUTE });
@@ -28,7 +29,7 @@ const rateKey = (token: unknown) => (typeof token === "string" ? token.slice(0, 
 
 /** Menú completo (incluye agotados con `available: false`). Precios en centavos. */
 export async function getMenu(): Promise<MenuCategory[]> {
-  return getMenuData();
+  return withMenuDrafts(await getMenuData());
 }
 
 /** Info pública de la mesa (`{ id, number, status }`) o null si el token no vale / está INACTIVE. */
@@ -61,7 +62,7 @@ export async function submitOrder(
 /** Cuenta en vivo (orden OPEN) o la última cerrada en las últimas 2 h. */
 export async function getTableBill(token: string): Promise<ActionResult<TableBillView>> {
   try {
-    return { ok: true, data: await getTableBillData(token) };
+    return { ok: true, data: withBillDrafts(await getTableBillData(token)) };
   } catch (e) {
     return toActionError(e);
   }

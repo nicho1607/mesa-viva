@@ -1,5 +1,7 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
 // Hoja inferior accesible sobre <dialog> nativo con showModal(): el resto de la página queda
 // inerte (trampa de foco), Esc cierra (evento cancel) y el foco vuelve al disparador.
 // Toque en el fondo también cierra. La animación de entrada se desactiva con reduced motion.
@@ -9,7 +11,7 @@ import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 type Props = {
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   /** Texto bajo el título (opcional). */
   subtitle?: ReactNode;
   children: ReactNode;
@@ -18,6 +20,7 @@ type Props = {
 };
 
 export function Sheet({ open, onClose, title, subtitle, children, footer, mobileTop = false }: Props) {
+  const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -108,7 +111,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, mobile
       }`}
     >
       <div className="flex shrink-0 items-start gap-3 border-b border-tinta/10 px-4 pt-4 pb-3">
-        <div className="min-w-0 flex-1">
+        <div className="max-h-[35dvh] min-w-0 flex-1 overflow-y-auto overscroll-contain">
           <h2 id={titleId} className="font-display text-2xl leading-tight font-semibold [font-stretch:87.5%]">
             {title}
           </h2>
@@ -118,7 +121,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, mobile
           type="button"
           onClick={onClose}
           className="-mr-2 -mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full text-tinta hover:bg-tinta/5"
-          aria-label="Cerrar"
+          aria-label={t("close")}
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />

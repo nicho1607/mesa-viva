@@ -1,5 +1,11 @@
 # Pruebas públicas en Render
 
+## Inglés del cliente
+
+La versión publicada habilita español e inglés en menú, pedido y cuenta del cliente. Conserva las fuentes, colores y componentes de Mesa Viva; el personal y el comprobante impreso siguen en español. `ENGLISH_RELEASED=true` habilita la función sin variables adicionales en Render.
+
+Las traducciones conservan su estado de revisión pendiente (`ENGLISH_REVIEWED=false`) y el aviso visible en inglés. El catálogo solo se aplica al leer: no se aprueban traducciones en la base ni se reescriben nombres históricos. La migración aditiva se aplica con el comando de arranque existente. No ejecutes un reset de la base ni borres `_seedInitialized` al actualizar.
+
 El archivo `render.yaml` crea un servicio Node y una base PostgreSQL, ambos en el plan Free y en la misma región. La base solo acepta conexiones desde la red privada de Render. No se utiliza la base del PC.
 
 1. En Render, entra a **New → Blueprint** y conecta el repositorio `nicho1607/mesa-viva`, rama `main`.

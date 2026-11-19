@@ -16,6 +16,8 @@ export const CLOSED_BILL_WINDOW_MS = 2 * 60 * 60 * 1000;
 // ---------------------------------------------------------------------------
 
 export type MenuProduct = {
+  nameEn?: string | null;
+  descriptionEn?: string | null;
   id: string;
   name: string;
   description: string | null;
@@ -23,7 +25,7 @@ export type MenuProduct = {
   imageUrl: string | null;
   available: boolean; // false = "Agotado" (se muestra, no se puede pedir)
 };
-export type MenuCategory = { id: string; name: string; products: MenuProduct[] };
+export type MenuCategory = { id: string; name: string; nameEn?: string | null; products: MenuProduct[] };
 
 /** Categorías (con productos) ordenadas por sortOrder, nombre; productos igual. */
 export async function getMenuData(): Promise<MenuCategory[]> {
@@ -32,9 +34,10 @@ export async function getMenuData(): Promise<MenuCategory[]> {
     select: {
       id: true,
       name: true,
+      nameEn: true,
       products: {
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, description: true, price: true, imageUrl: true, available: true },
+        select: { id: true, name: true, nameEn: true, description: true, descriptionEn: true, price: true, imageUrl: true, available: true },
       },
     },
   });
@@ -67,6 +70,7 @@ export async function findPublicTable(token: unknown): Promise<PublicTable | nul
 // ---------------------------------------------------------------------------
 
 export type BillItemView = {
+  productNameEn?: string | null;
   id: string;
   productName: string;
   unitPrice: number; // centavos (snapshot)
@@ -93,6 +97,7 @@ export type TableBillView =
 const itemSelect = {
   id: true,
   productName: true,
+  productNameEn: true,
   unitPrice: true,
   quantity: true,
   notes: true,

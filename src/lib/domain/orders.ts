@@ -139,6 +139,7 @@ async function addItemsCore(
             orderId: locked.id,
             productId: p.id,
             productName: p.name,
+            productNameEn: p.nameEn,
             unitPrice: p.price,
             quantity: i.quantity,
             notes: i.notes ? i.notes : null,

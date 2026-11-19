@@ -10,16 +10,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getTableBill } from "@/app/actions/order.actions";
 import type { BillItemView, BillRoundView, TableBillView } from "@/lib/domain/queries";
-import { PAYMENT_METHOD_LABEL } from "@/lib/payment-methods";
-import { CUSTOMER_STATUS_LABEL, type CustomerStatus } from "@/lib/domain/order-status";
-import { formatMoney } from "@/lib/money";
+import type { MessageKey } from "@/lib/i18n/messages";
+import type { Locale } from "@/lib/i18n";
+import { useLanguage } from "./LanguageProvider";
+import { TranslatedContent } from "./TranslatedContent";
+import { type CustomerStatus } from "@/lib/domain/order-status";
 import { useRealtimeInvalidate } from "@/lib/realtime/use-channel";
 import { CallWaiterButtons } from "./CallWaiterButtons";
+
+const STATUS_KEYS = { IN_PREPARATION: "preparing", SERVED: "served", CLOSED: "closed" } as const;
+const PAYMENT_KEYS = { CASH: "cash", CARD: "card", TRANSFER: "transfer", MIXED: "mixed" } as const;
 
 type Props = { token: string; initialBill?: TableBillView };
 type BillWithOrder = Extract<TableBillView, { order: object }>;
 
 export function LiveBill({ token, initialBill }: Props) {
+  const { t, locale } = useLanguage();
   const { data, isPending, isError, refetch, isFetching } = useQuery({
     queryKey: ["bill", token],
     queryFn: async () => {
@@ -37,13 +43,14 @@ export function LiveBill({ token, initialBill }: Props) {
   if (connected && !everConnected) setEverConnected(true);
 
   // Rondas nuevas y cambios de estado: ajuste de estado durante el render (sin effects).
-  const [track, setTrack] = useState<Track | null>(() => nextTrack(null, initialBill));
-  const next = nextTrack(track, data);
+  const [track, setTrack] = useState<Track | null>(() => nextTrack(null, initialBill, locale));
+  const next = nextTrack(track, data, locale);
   if (next !== track) setTrack(next);
 
   const live = (
     <p aria-live="polite" className="sr-only">
-      {track?.announce}
+      {track?.announce?.rounds.map((round) => t("roundAdded", { round })).join(" ")}
+      {track?.announce?.status ? (track.announce.status === "CLOSED" ? t("closedAnnouncement") : t("statusChanged", { status: t(STATUS_KEYS[track.announce.status]) })) : ""}
     </p>
   );
 
@@ -52,11 +59,11 @@ export function LiveBill({ token, initialBill }: Props) {
       <>
         {live}
         {isPending && !isError ? (
-          <p className="py-10 text-lg text-tinta-suave">Cargando tu cuenta…</p>
+          <p className="py-10 text-lg text-tinta-suave">{t("loadingBill")}</p>
         ) : (
           <div className="py-10">
             <p role="alert" className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-lg">
-              No pudimos cargar tu cuenta. Revisa tu conexión.
+              {t("billError")}
             </p>
             <button
               type="button"
@@ -64,7 +71,7 @@ export function LiveBill({ token, initialBill }: Props) {
               disabled={isFetching}
               className="mt-4 min-h-11 rounded-lg border-2 border-tinta px-4 font-bold disabled:opacity-60"
             >
-              {isFetching ? "Reintentando…" : "Reintentar"}
+              {t(isFetching ? "retrying" : "retry")}
             </button>
           </div>
         )}
@@ -80,14 +87,14 @@ export function LiveBill({ token, initialBill }: Props) {
         {live}
         <div className="py-8">
           <p className="font-display text-[1.75rem] leading-tight font-semibold tracking-tight [font-stretch:87.5%]">
-            Aún no has pedido nada.
+            {t("noOrder")}
           </p>
-          <p className="mt-2 text-lg text-tinta-suave">Lo que pidas aparecerá aquí, ronda por ronda.</p>
+          <p className="mt-2 text-lg text-tinta-suave">{t("noOrderHelp")}</p>
           <Link
             href={`/m/${token}`}
             className="mt-6 inline-flex min-h-13 items-center justify-center rounded-xl bg-tinta px-6 text-lg font-bold text-plato hover:bg-[#25365c]"
           >
-            Ver el menú
+            {t("viewMenu")}
           </Link>
           {reconnecting ? <ReconnectingNote /> : null}
         </div>
@@ -123,26 +130,22 @@ type Track = {
   status: CustomerStatus | null;
   /** Rondas que llegaron en vivo en la última actualización (se imprimen). */
   fresh: number[];
-  announce: string;
+  announce: { rounds: number[]; status: CustomerStatus | null; locale: Locale } | null;
 };
 
-function nextTrack(prev: Track | null, bill: TableBillView | undefined): Track | null {
+function nextTrack(prev: Track | null, bill: TableBillView | undefined, locale: Locale): Track | null {
   if (!bill) return prev;
   const orderId = bill.order?.id ?? null;
   const rounds = bill.order ? bill.order.rounds.map((r) => r.round) : [];
   const status = bill.order ? (bill as BillWithOrder).customerStatus : null;
   const sig = `${orderId}|${rounds.join(",")}|${status}`;
-  if (prev && prev.sig === sig) return prev;
-  if (!prev) return { sig, orderId, rounds, status, fresh: [], announce: "" };
+  if (prev && prev.sig === sig) return prev.announce && prev.announce.locale !== locale ? { ...prev, announce: null } : prev;
+  if (!prev) return { sig, orderId, rounds, status, fresh: [], announce: null };
 
   const known = prev.orderId === orderId ? prev.rounds : [];
   const fresh = rounds.filter((r) => !known.includes(r));
-  const parts: string[] = [];
-  for (const r of fresh) parts.push(`Ronda ${r} agregada a tu cuenta.`);
-  if (status && status !== prev.status) {
-    parts.push(status === "CLOSED" ? "Servicio finalizado. Gracias por tu visita." : `Estado del pedido: ${CUSTOMER_STATUS_LABEL[status]}.`);
-  }
-  return { sig, orderId, rounds, status, fresh, announce: parts.join(" ") || prev.announce };
+  const changedStatus = status !== prev.status ? status : null;
+  return { sig, orderId, rounds, status, fresh, announce: fresh.length || changedStatus ? { rounds: fresh, status: changedStatus, locale } : prev.announce };
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +168,7 @@ function Teeth({ image }: { image: string }) {
 }
 
 function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: number[]; reconnecting: boolean }) {
+  const { t, money: formatMoney } = useLanguage();
   const { order, totals, customerStatus, currency, paymentMethod } = bill;
   const closed = customerStatus === "CLOSED";
   const money = (c: number) => formatMoney(c, currency);
@@ -184,7 +188,7 @@ function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: num
             id="bill-title"
             className="font-display text-[1.75rem] leading-none font-semibold tracking-tight [font-stretch:87.5%]"
           >
-            Tu cuenta
+            {t("yourBill")}
           </h2>
           <StatusPill status={customerStatus} />
         </header>
@@ -195,35 +199,35 @@ function Ticket({ bill, fresh, reconnecting }: { bill: BillWithOrder; fresh: num
         ))}
 
         <dl className="mt-6 border-t-2 border-dashed border-tinta/30 pt-4 text-base tabular-nums sm:text-lg">
-          <TotalRow label="Subtotal" value={money(totals.subtotal)} />
+          <TotalRow label={t("subtotal")} value={money(totals.subtotal)} />
           {totals.pricesIncludeTax ? (
-            <TotalRow label={`IVA incluido (${taxPct}%)`} value={money(totals.taxAmount)} muted />
+            <TotalRow label={t("includedTax", { percent: taxPct })} value={money(totals.taxAmount)} muted />
           ) : (
-            <TotalRow label={`IVA (${taxPct}%)`} value={money(totals.taxAmount)} />
+            <TotalRow label={t("tax", { percent: taxPct })} value={money(totals.taxAmount)} />
           )}
-          <TotalRow label={`Propina sugerida (${tipPct}%)`} value={money(totals.tipAmount)} />
-          {paymentMethod ? <TotalRow label="Método de pago" value={PAYMENT_METHOD_LABEL[paymentMethod]} /> : null}
+          <TotalRow label={t("tip", { percent: tipPct })} value={money(totals.tipAmount)} />
+          {paymentMethod ? <TotalRow label={t("payment")} value={t(PAYMENT_KEYS[paymentMethod])} /> : null}
           {paymentMethod === "MIXED" && bill.transferAmount !== null && bill.cashAmount !== null ? (
             <>
-              <TotalRow label="Transferencia" value={money(bill.transferAmount)} />
-              <TotalRow label="Efectivo" value={money(bill.cashAmount)} />
+              <TotalRow label={t("transfer")} value={money(bill.transferAmount)} />
+              <TotalRow label={t("cash")} value={money(bill.cashAmount)} />
             </>
           ) : null}
           <div className="mt-3 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-3">
-            <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total</dt>
+            <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">{t("total")}</dt>
             <dd className="font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums">
               {money(totals.total)}
             </dd>
           </div>
         </dl>
         <p className="mt-2 text-tinta-suave">
-          {totals.pricesIncludeTax ? "Los precios ya incluyen IVA. " : ""}La propina es voluntaria.
+          {totals.pricesIncludeTax ? t("taxHelp") : ""}{t("tipHelp")}
         </p>
 
         {closed ? (
           <p className="mt-6 border-t-2 border-dashed border-tinta/30 pt-5 text-center">
-            <span className="block font-display text-xl font-semibold [font-stretch:87.5%]">Servicio finalizado</span>
-            <span className="block text-lg text-tinta-suave">Gracias por tu visita</span>
+            <span className="block font-display text-xl font-semibold [font-stretch:87.5%]">{t("closed")}</span>
+            <span className="block text-lg text-tinta-suave">{t("thanks")}</span>
           </p>
         ) : null}
       </div>
@@ -240,24 +244,27 @@ const PILL: Record<CustomerStatus, string> = {
 };
 
 function StatusPill({ status }: { status: CustomerStatus }) {
+  const { t } = useLanguage();
   return (
     <p className={`inline-flex min-h-8 items-center rounded-full px-3.5 text-base font-bold ${PILL[status]}`}>
-      <span className="sr-only">Estado del pedido: </span>
-      {CUSTOMER_STATUS_LABEL[status]}
+      <span className="sr-only">{t("status")}</span>
+      {t(STATUS_KEYS[status])}
     </p>
   );
 }
 
 function ReconnectingNote() {
+  const { t } = useLanguage();
   return (
     <p role="status" className="mt-3 flex items-center gap-2 text-sm text-tinta-suave">
       <span aria-hidden="true" className="size-2 rounded-full border-2 border-tinta-suave" />
-      Reconectando…
+      {t("reconnecting")}
     </p>
   );
 }
 
 function Round({ round, money, fresh }: { round: BillRoundView; money: (c: number) => string; fresh: boolean }) {
+  const { t } = useLanguage();
   const headingId = `ronda-${round.round}`;
   return (
     <section aria-labelledby={headingId} className={`mt-6 ${fresh ? "mv-print" : ""}`}>
@@ -266,7 +273,7 @@ function Round({ round, money, fresh }: { round: BillRoundView; money: (c: numbe
         className="flex items-center gap-3 font-display text-lg font-semibold [font-stretch:87.5%]"
       >
         {fresh ? <span aria-hidden="true" className="h-4 w-1 rounded-full bg-azafran" /> : null}
-        Ronda {round.round}
+        {t("round", { round: round.round })}
         <span aria-hidden="true" className="h-0 flex-1 border-t-2 border-dashed border-tinta/30" />
       </h3>
       <ul className="mt-1">
@@ -278,13 +285,14 @@ function Round({ round, money, fresh }: { round: BillRoundView; money: (c: numbe
   );
 }
 
-const ITEM_MARK: Record<Exclude<BillItemView["status"], "CANCELLED">, { label: string; dot: string }> = {
-  PENDING: { label: "pendiente", dot: "border-2 border-tinta-suave" },
-  IN_PREPARATION: { label: "en cocina", dot: "bg-azafran" },
-  SERVED: { label: "servido", dot: "bg-albahaca" },
+const ITEM_MARK: Record<Exclude<BillItemView["status"], "CANCELLED">, { label: MessageKey; dot: string }> = {
+  PENDING: { label: "pending", dot: "border-2 border-tinta-suave" },
+  IN_PREPARATION: { label: "inKitchen", dot: "bg-azafran" },
+  SERVED: { label: "itemServed", dot: "bg-albahaca" },
 };
 
 function ItemRow({ item: i, money }: { item: BillItemView; money: (c: number) => string }) {
+  const { t } = useLanguage();
   const cancelled = i.status === "CANCELLED";
   const mark = i.status === "CANCELLED" ? null : ITEM_MARK[i.status];
   return (
@@ -296,11 +304,11 @@ function ItemRow({ item: i, money }: { item: BillItemView; money: (c: number) =>
         <span
           className={`font-display text-xl leading-snug font-semibold [font-stretch:87.5%] ${cancelled ? "text-tinta-suave line-through" : ""}`}
         >
-          {i.productName}
+          <TranslatedContent original={i.productName} english={i.productNameEn} />
         </span>
         <span aria-hidden="true" className="mb-1 min-w-4 flex-1 self-end border-b-2 border-dotted border-tinta/25" />
         {cancelled ? (
-          <span className="font-bold whitespace-nowrap text-guindilla">Cancelado</span>
+          <span className="font-bold whitespace-nowrap text-guindilla">{t("cancelled")}</span>
         ) : (
           <span className="text-lg whitespace-nowrap tabular-nums">{money(i.unitPrice * i.quantity)}</span>
         )}
@@ -309,7 +317,7 @@ function ItemRow({ item: i, money }: { item: BillItemView; money: (c: number) =>
         {mark ? (
           <p className="flex items-center gap-1.5 text-sm text-tinta-suave">
             <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${mark.dot}`} />
-            {mark.label}
+            {t(mark.label)}
           </p>
         ) : null}
         {i.notes ? <p className="mt-0.5 text-tinta-suave">{i.notes}</p> : null}

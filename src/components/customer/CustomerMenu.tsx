@@ -30,13 +30,14 @@ export function CustomerMenu({ token, categories }: Props) {
   const router = useRouter();
   const [cart, setCart] = useCart(token);
   const [selected, setSelected] = useState<MenuProduct | null>(null);
+  const [dishOpen, setDishOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [send, setSend] = useState<SendState>({ kind: "idle" });
   // Productos que el servidor rechazó como no disponibles en el último envío.
   const [rejected, setRejected] = useState<ReadonlySet<string>>(new Set());
 
   const menu = useMemo(() => {
-    const m = new Map<string, MenuInfo>();
+    const m = new Map<string, MenuInfo & { nameEn?: string | null }>();
     for (const c of categories) for (const p of c.products) m.set(p.id, p);
     return m;
   }, [categories]);
@@ -58,7 +59,7 @@ export function CustomerMenu({ token, categories }: Props) {
     try {
       res = await submitOrder(token, items);
     } catch {
-      setSend({ kind: "error", message: "No hay conexión. Revisa tu internet e inténtalo de nuevo." });
+      setSend({ kind: "error", code: "NETWORK" });
       return;
     }
     if (res.ok) {
@@ -72,42 +73,41 @@ export function CustomerMenu({ token, categories }: Props) {
       router.refresh(); // el menú también mostrará "Agotado"
       setSend({
         kind: "error",
-        message: "Algunos platos ya no están disponibles. Quítalos o envía el resto del pedido.",
+        code: "UNAVAILABLE_PRODUCTS",
       });
       return;
     }
-    setSend({ kind: "error", message: res.error });
+    setSend({ kind: "error", code: res.code, details: res.details });
   }
 
   return (
     <>
       <CategoryTabs categories={categories} />
-      <MenuList categories={categories} inCart={inCart} onSelect={setSelected} />
+      <MenuList categories={categories} inCart={inCart} onSelect={(p) => { setSelected(p); setDishOpen(true); }} />
 
       <CartBar
         count={cartCount(lines)}
         total={cartTotal(lines)}
         onOpen={() => {
-          setSend({ kind: "idle" });
+          setSend((s) => s.kind === "sent" ? { kind: "idle" } : s);
           setCartOpen(true);
         }}
       />
 
       <DishSheet
-        product={selected}
-        onClose={() => setSelected(null)}
+        product={selected ? categories.flatMap((c) => c.products).find((p) => p.id === selected.id) ?? selected : null}
+        open={dishOpen}
+        onClose={() => setDishOpen(false)}
         onAdd={({ product, quantity, note }) => {
           setCart((c) => addLine(c, { productId: product.id, name: product.name, unitPrice: product.price, quantity, note }));
           setSelected(null);
+          setDishOpen(false);
         }}
       />
 
       <CartSheet
         open={cartOpen}
-        onClose={() => {
-          setCartOpen(false);
-          if (send.kind === "sent") setSend({ kind: "idle" });
-        }}
+        onClose={() => setCartOpen(false)}
         token={token}
         lines={lines}
         send={send}

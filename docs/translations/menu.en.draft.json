@@ -1,0 +1,182 @@
+{
+  "status": "DRAFT_NOT_REVIEWED",
+  "source": "prisma/seed.ts — menú de demostración; contrastar con el menú real antes de aprobar",
+  "bilingualReviewer": null,
+  "restaurantReviewer": null,
+  "categories": [
+    {
+      "source": "Entradas",
+      "nameEn": "Starters",
+      "status": "pending"
+    },
+    {
+      "source": "Platos fuertes",
+      "nameEn": "Main courses",
+      "status": "pending"
+    },
+    {
+      "source": "Bebidas",
+      "nameEn": "Drinks",
+      "status": "pending"
+    },
+    {
+      "source": "Postres",
+      "nameEn": "Desserts",
+      "status": "pending"
+    }
+  ],
+  "products": [
+    {
+      "sourceName": "Empanadas vallunas",
+      "sourceDescription": "Tres empanadas de maíz rellenas de papa y carne, con ají de la casa.",
+      "nameEn": "Empanadas vallunas — corn empanadas",
+      "descriptionEn": "Three corn empanadas filled with potato and meat, served with house ají sauce.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Patacones con hogao",
+      "sourceDescription": "Patacones crocantes con hogao casero y queso costeño rallado.",
+      "nameEn": "Patacones — fried plantains with hogao sauce",
+      "descriptionEn": "Crisp fried plantains with homemade hogao sauce and grated costeño cheese.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Arepitas con chicharrón",
+      "sourceDescription": "Mini arepas de maíz peto con chicharrón crocante y guacamole.",
+      "nameEn": "Mini corn arepas with crispy pork",
+      "descriptionEn": "Mini corn arepas with crispy pork and guacamole.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Ceviche de camarón",
+      "sourceDescription": "Camarón en limón, cebolla morada, cilantro y salsa rosada, con chips de plátano.",
+      "nameEn": "Shrimp ceviche",
+      "descriptionEn": "Shrimp with lime, red onion, cilantro (coriander) and salsa rosada (pink sauce), served with plantain chips.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Sopa de tortilla",
+      "sourceDescription": "Caldo de tomate especiado con tiras de tortilla, aguacate y crema.",
+      "nameEn": "Tortilla soup",
+      "descriptionEn": "Spiced tomato broth with tortilla strips, avocado and cream.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Bandeja paisa",
+      "sourceDescription": "Frijoles, arroz, carne molida, chicharrón, chorizo, huevo frito, maduro, arepa y aguacate.",
+      "nameEn": "Bandeja paisa — traditional Colombian platter",
+      "descriptionEn": "Beans, rice, ground meat, pork crackling, chorizo, fried egg, ripe plantain, arepa and avocado.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Ajiaco santafereño",
+      "sourceDescription": "Sopa de tres papas con pollo desmechado y guascas; con alcaparras, crema y arroz.",
+      "nameEn": "Ajiaco santafereño — chicken and potato soup",
+      "descriptionEn": "Three-potato soup with shredded chicken and guascas herbs; served with capers, cream and rice.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Sobrebarriga en salsa criolla",
+      "sourceDescription": "Sobrebarriga horneada en salsa criolla, con papa salada y arroz blanco.",
+      "nameEn": "Sobrebarriga in criolla sauce",
+      "descriptionEn": "Oven-cooked beef in criolla sauce, served with salted potatoes and white rice.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Mojarra frita",
+      "sourceDescription": "Mojarra entera frita, con arroz de coco, patacones y ensalada.",
+      "nameEn": "Fried mojarra",
+      "descriptionEn": "Whole fried mojarra fish with coconut rice, fried plantains and salad.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Pechuga a la plancha",
+      "sourceDescription": "Pechuga marinada en hierbas con papas a la francesa y ensalada fresca.",
+      "nameEn": "Grilled chicken breast",
+      "descriptionEn": "Herb-marinated chicken breast with fries and fresh salad.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Limonada de coco",
+      "sourceDescription": "Limonada frappé con crema de coco.",
+      "nameEn": "Coconut limeade",
+      "descriptionEn": "Blended limeade with coconut cream.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Jugo de lulo",
+      "sourceDescription": "Jugo natural de lulo en agua o en leche.",
+      "nameEn": "Lulo juice",
+      "descriptionEn": "Fresh lulo juice, made with water or milk.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Aguapanela con limón",
+      "sourceDescription": "Aguapanela fría con limón, preparada en casa.",
+      "nameEn": "Aguapanela — panela cane-sugar drink with lime",
+      "descriptionEn": "House-made chilled panela cane-sugar drink with lime.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Cerveza nacional",
+      "sourceDescription": "Botella de 330 ml.",
+      "nameEn": "Colombian beer",
+      "descriptionEn": "330 ml bottle.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Café tinto",
+      "sourceDescription": "Café colombiano de origen, recién colado.",
+      "nameEn": "Black coffee",
+      "descriptionEn": "Freshly brewed Colombian black coffee.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Tres leches",
+      "sourceDescription": "Bizcocho húmedo bañado en tres leches con canela.",
+      "nameEn": "Tres leches cake",
+      "descriptionEn": "Moist sponge cake soaked in three milks with cinnamon.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Postre de natas",
+      "sourceDescription": "Receta tradicional boyacense de natas con uvas pasas.",
+      "nameEn": "Postre de natas",
+      "descriptionEn": "Postre de natas — traditional Colombian milk dessert with raisins.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Brevas con arequipe",
+      "sourceDescription": "Brevas caladas con arequipe y queso campesino.",
+      "nameEn": "Figs in syrup with arequipe milk caramel",
+      "descriptionEn": "Figs cooked in syrup with arequipe milk caramel and campesino cheese.",
+      "status": "pending",
+      "reviewedBy": null
+    },
+    {
+      "sourceName": "Obleas",
+      "sourceDescription": "Obleas con arequipe, queso rallado y mermelada de mora.",
+      "nameEn": "Obleas — wafers with arequipe milk caramel",
+      "descriptionEn": "Wafer sandwich with arequipe milk caramel, grated cheese and blackberry jam.",
+      "status": "pending",
+      "reviewedBy": null
+    }
+  ]
+}

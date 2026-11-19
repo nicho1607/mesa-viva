@@ -108,7 +108,9 @@ describe("getMenu / getTableByToken", () => {
     expect(mine[0].products[0]).toEqual({
       id: f.burger.id,
       name: "Hamburguesa",
+      nameEn: null,
       description: null,
+      descriptionEn: null,
       price: f.burger.price,
       imageUrl: null,
       available: true,

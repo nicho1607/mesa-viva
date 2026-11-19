@@ -56,7 +56,7 @@ Arquitectura completa: `docs/ARQUITECTURA.md`. Historias: `claude-loop/prd.json`
 - Los archivos `"use server"` que no importan `next/*` se pueden importar tal cual en Vitest.
 
 ## UI
-- Todo el texto visible **en español**.
+- Todo el texto visible **en español**, salvo la experiencia del cliente `/m/*`, que admite inglés para turistas con los diccionarios de `src/lib/i18n`. Inglés está publicado con aviso de revisión pendiente (`ENGLISH_RELEASED=true`, `ENGLISH_REVIEWED=false`): ver `docs/IDIOMAS.md`. Personal y comprobantes impresos siguen en español.
 - Tokens de color (`bg-plato`, `text-tinta`, `text-tinta-suave`, `azafran`, `albahaca`, `guindilla`) y fuentes (`font-display` = Bricolage Grotesque, `font-sans` = Atkinson Hyperlegible) definidos en `src/app/globals.css` vía `@theme`; ver sección 6 de la doc.
 - Contraste AA, foco visible, objetivos táctiles ≥ 44 px (`min-h-11`), respetar `prefers-reduced-motion`.
 - **Cliente (MV-007)**: rutas en `src/app/m/[token]/`. El `layout.tsx` resuelve la mesa con `getCustomerTable(token)` (`@/lib/customer-table`, `React.cache` sobre `findPublicTable`) y, si no vale, muestra "Este código no es válido, pide ayuda al mesero" en lugar de los hijos; si vale, cabecera "Mesa {n}" + `HeaderNav` ("Mi cuenta" ↔ "Volver al menú"). Las páginas hijas (p.ej. `cuenta/page.tsx`) llaman `await connection()` y pueden volver a pedir `getCustomerTable` (memoizado).

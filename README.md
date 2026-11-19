@@ -18,7 +18,7 @@ I built this project with **Claude Code**, an AI coding agent. I defined what to
 
 ### What it does
 
-- **Customer** (`/m/{token}`): menu by category, notes for the kitchen, ordering in rounds, a live bill, and buttons to call the waiter or ask for the bill.
+- **Customer** (`/m/{token}`): Spanish and English menu, notes for the kitchen, ordering in rounds, a live bill, and buttons to call the waiter or ask for the bill. English translations display a pending-review notice.
 - **Waiter** (`/staff`): floor plan of their tables with real-time alerts; confirm, serve and close with a tip.
 - **Admin** (`/staff/admin`): menu, tables, zones, staff and QR codes.
 
@@ -99,7 +99,7 @@ Construí este proyecto con **Claude Code**, un agente de programación. Yo defi
 
 ### Qué hace
 
-- **Cliente** (`/m/{token}`): menú por categorías, notas para cocina, pedido por rondas, cuenta en vivo, llamar al mesero o pedir la cuenta.
+- **Cliente** (`/m/{token}`): menú en español e inglés, notas para cocina, pedido por rondas, cuenta en vivo, llamar al mesero o pedir la cuenta. Las traducciones inglesas muestran un aviso de revisión pendiente.
 - **Mesero** (`/staff`): plano de sus mesas con alertas en tiempo real; confirmar, servir y cerrar con propina.
 - **Admin** (`/staff/admin`): menú, mesas, zonas, equipo y códigos QR.
 

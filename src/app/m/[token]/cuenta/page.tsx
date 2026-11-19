@@ -3,11 +3,15 @@ import { connection } from "next/server";
 import { getTableBill } from "@/app/actions/order.actions";
 import { LiveBill } from "@/components/customer/LiveBill";
 import { getCustomerTable } from "@/lib/customer-table";
+import { CustomerHeading } from "@/components/customer/LanguageProvider";
+import { getCustomerLocale } from "@/lib/i18n/server";
+import { translate } from "@/lib/i18n";
 
 export async function generateMetadata({ params }: PageProps<"/m/[token]/cuenta">): Promise<Metadata> {
   const { token } = await params;
   const table = await getCustomerTable(token);
-  return { title: table ? `Cuenta · Mesa ${table.number} · Mesa Viva` : "Código no válido · Mesa Viva" };
+  const locale = await getCustomerLocale();
+  return { title: `${table ? `${translate(locale, "metaBill")} · ${translate(locale, "table", { number: table.number })}` : translate(locale, "invalidTitle")} · Mesa Viva` };
 }
 
 export default async function CustomerBillPage({ params }: PageProps<"/m/[token]/cuenta">) {
@@ -21,7 +25,7 @@ export default async function CustomerBillPage({ params }: PageProps<"/m/[token]
 
   return (
     <main className="flex-1 pt-2 pb-16">
-      <h1 className="sr-only">Cuenta de la mesa {table.number}</h1>
+      <CustomerHeading number={table.number} bill />
       <LiveBill token={token} initialBill={initial.ok ? initial.data : undefined} />
     </main>
   );

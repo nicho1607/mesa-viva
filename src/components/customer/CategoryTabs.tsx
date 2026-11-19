@@ -1,11 +1,14 @@
 "use client";
 
+import { TranslatedContent } from "./TranslatedContent";
+import { useLanguage } from "./LanguageProvider";
+
 // Pestañas de categoría pegajosas. Son enlaces de navegación (#seccion), no un tablist:
 // Tab/Enter funcionan solos. Scroll-spy con IntersectionObserver resalta la sección visible.
 
 import { useEffect, useRef, useState } from "react";
 
-type Props = { categories: { id: string; name: string }[] };
+type Props = { categories: { id: string; name: string; nameEn?: string | null }[] };
 
 export const sectionId = (categoryId: string) => `cat-${categoryId}`;
 
@@ -13,6 +16,7 @@ const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function CategoryTabs({ categories }: Props) {
+  const { t } = useLanguage();
   const [active, setActive] = useState(categories[0]?.id ?? "");
   const navRef = useRef<HTMLElement>(null);
   // Mientras dura el scroll provocado por un toque, no dejar que el observer "salte" de pestaña.
@@ -60,7 +64,7 @@ export function CategoryTabs({ categories }: Props) {
   return (
     <nav
       ref={navRef}
-      aria-label="Categorías del menú"
+      aria-label={t("categories")}
       className="sticky top-0 z-10 -mx-4 overflow-x-auto border-b border-tinta/15 bg-plato/95 px-2 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <ul className="flex w-max min-w-full gap-1">
@@ -85,7 +89,7 @@ export function CategoryTabs({ categories }: Props) {
                   isActive ? "font-bold text-tinta" : "text-tinta-suave hover:text-tinta"
                 }`}
               >
-                {c.name}
+                <TranslatedContent original={c.name} english={c.nameEn} />
                 <span
                   aria-hidden="true"
                   className={`absolute inset-x-3 bottom-0 h-[3px] rounded-t-sm ${isActive ? "bg-tinta" : "bg-transparent"}`}

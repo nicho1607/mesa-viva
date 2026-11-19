@@ -87,6 +87,7 @@ model Table {
 }
 
 model Category {
+  nameEn    String?
   id        String    @id @default(uuid())
   name      String    @unique // Entradas, Platos fuertes, Bebidas, Postres
   sortOrder Int       @default(0)
@@ -94,6 +95,8 @@ model Category {
 }
 
 model Product {
+  nameEn      String?
+  descriptionEn String?
   id          String      @id @default(uuid())
   name        String
   description String?
@@ -128,6 +131,7 @@ model Order {
 }
 
 model OrderItem {
+  productNameEn String? // snapshot de traducción aprobada; null en históricos
   id          String     @id @default(uuid())
   orderId     String
   order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)

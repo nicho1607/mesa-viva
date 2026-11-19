@@ -71,7 +71,7 @@ export function updateNote(cart: Cart, key: string, note: string): Cart {
 
 export type MenuInfo = { name: string; price: number; available: boolean };
 
-export type CartLineView = CartLine & { unavailable: boolean };
+export type CartLineView = CartLine & { unavailable: boolean; nameEn?: string | null };
 
 /**
  * Cruza el carrito con el menú actual: refresca nombre y precio estimado y marca como
@@ -79,7 +79,7 @@ export type CartLineView = CartLine & { unavailable: boolean };
  */
 export function reconcile(
   cart: Cart,
-  menu: ReadonlyMap<string, MenuInfo>,
+  menu: ReadonlyMap<string, MenuInfo & { nameEn?: string | null }>,
   rejected: ReadonlySet<string> = new Set(),
 ): CartLineView[] {
   return cart.map((l) => {
@@ -87,6 +87,7 @@ export function reconcile(
     return {
       ...l,
       name: p?.name ?? l.name,
+      nameEn: p?.nameEn,
       unitPrice: p?.price ?? l.unitPrice,
       unavailable: !p || !p.available || rejected.has(l.productId),
     };

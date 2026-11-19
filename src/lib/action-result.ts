@@ -2,12 +2,14 @@
 
 import { ZodError } from "zod";
 import { DomainError, UnavailableProductsError } from "@/lib/domain/errors";
+import { validationKey } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n/messages";
 
 export type ActionError = {
   ok: false;
   error: string; // mensaje en español apto para la UI
   code: string; // p.ej. VALIDATION, INVALID_TABLE, UNAVAILABLE_PRODUCTS, RATE_LIMITED, INTERNAL
-  details?: { productIds?: string[] };
+  details?: { productIds?: string[]; issues?: MessageKey[] };
 };
 
 export type ActionResult<T> = { ok: true; data: T } | ActionError;
@@ -43,7 +45,7 @@ export function toActionError(e: unknown): ActionError {
   if (e instanceof DomainError) return { ok: false, error: e.message, code: e.code };
   if (e instanceof ZodError) {
     const msgs = [...new Set(e.issues.map(describeIssue))];
-    return { ok: false, error: `Revisa tu pedido: ${msgs.join("; ")}.`, code: "VALIDATION" };
+    return { ok: false, error: `Revisa tu pedido: ${msgs.join("; ")}.`, code: "VALIDATION", details: { issues: [...new Set(e.issues.map(validationKey))] } };
   }
   console.error("[action] error inesperado", e);
   return { ok: false, error: GENERIC_ERROR, code: "INTERNAL" };

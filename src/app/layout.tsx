@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Atkinson_Hyperlegible, Bricolage_Grotesque } from "next/font/google";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import "./globals.css";
+import { getCustomerLocale } from "@/lib/i18n/server";
 
 const bricolage = Bricolage_Grotesque({
   variable: "--font-bricolage",
@@ -20,10 +21,11 @@ export const metadata: Metadata = {
   description: "Menú virtual y pedidos en tiempo real",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const locale = await getCustomerLocale();
   return (
     <html
-      lang="es"
+      lang={locale}
       className={`${bricolage.variable} ${atkinson.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

@@ -7,23 +7,25 @@
 import { useEffect, useRef, useState } from "react";
 import { callWaiter } from "@/app/actions/order.actions";
 import { Sheet } from "@/components/customer/Sheet";
-import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
+import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
+
+import { useLanguage } from "./LanguageProvider";
+import { customerError } from "@/lib/i18n";
+import type { ActionError } from "@/lib/action-result";
 
 type Reason = "assistance" | "bill";
 type CallState =
   | { kind: "idle" }
   | { kind: "sending"; reason: Reason }
   | { kind: "sent"; reason: Reason }
-  | { kind: "error"; message: string; paymentMethod?: PaymentMethod };
+  | { kind: "error"; code: string; details?: ActionError["details"]; paymentMethod?: PaymentMethod };
 
 const COOLDOWN_MS = 8_000;
 
-const SENT_TEXT: Record<Reason, string> = {
-  assistance: "Avisamos a tu mesero. Viene en un momento.",
-  bill: "Avisamos a tu mesero. Te trae la cuenta en un momento.",
-};
+const PAYMENT_KEYS = { CASH: "cash", CARD: "card", TRANSFER: "transfer", MIXED: "mixed" } as const;
 
 export function CallWaiterButtons({ token, withBill }: { token: string; withBill: boolean }) {
+  const { t, locale } = useLanguage();
   const [state, setState] = useState<CallState>({ kind: "idle" });
   const [pickerOpen, setPickerOpen] = useState(false);
   const sending = useRef(false);
@@ -52,13 +54,11 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
       setState({
         kind: "error",
         paymentMethod,
-        message:
-          r.code === "RATE_LIMITED"
-            ? "Ya avisamos a tu mesero hace un momento. Espera un minuto antes de volver a llamar."
-            : r.error,
+        code: r.code === "RATE_LIMITED" ? "CALL_RATE_LIMITED" : r.code,
+        details: r.details,
       });
     } catch {
-      setState({ kind: "error", paymentMethod, message: "No pudimos avisar al mesero. Inténtalo de nuevo." });
+      setState({ kind: "error", paymentMethod, code: "CALL_FAILED" });
     } finally {
       sending.current = false;
     }
@@ -67,12 +67,11 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
   function closePicker() {
     if (sending.current || state.kind === "sending") return;
     setPickerOpen(false);
-    setState({ kind: "idle" });
   }
 
   const failedMethod = state.kind === "error" ? state.paymentMethod : undefined;
   const label = (reason: Reason, text: string) =>
-    state.kind === "sending" && state.reason === reason ? "Avisando…" : text;
+    state.kind === "sending" && state.reason === reason ? t("notifying") : text;
 
   return (
     <div>
@@ -83,21 +82,20 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
           disabled={busy}
           className="flex min-h-13 items-center justify-center rounded-xl border-2 border-tinta px-5 text-lg font-bold text-tinta hover:bg-tinta/[0.04] disabled:border-tinta/35 disabled:text-tinta-suave"
         >
-          {label("assistance", "Llamar al mesero")}
+          {label("assistance", t("callWaiter"))}
         </button>
         {withBill ? (
           <button
             type="button"
             onClick={() => {
               if (busy) return;
-              setState({ kind: "idle" });
               setPickerOpen(true);
             }}
             aria-haspopup="dialog"
             aria-disabled={busy}
             className="flex min-h-13 items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-[#25365c] aria-disabled:bg-tinta/45"
           >
-            Pedir la cuenta
+            {t("requestBill")}
           </button>
         ) : null}
       </div>
@@ -109,14 +107,14 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
                 <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            {SENT_TEXT[state.reason]}
+            {t(state.reason === "assistance" ? "assistanceSent" : "billSent")}
           </p>
         ) : state.kind === "error" && !pickerOpen ? (
-          <p className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">{state.message}</p>
+          <p className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">{customerError(locale, state)}</p>
         ) : null}
       </div>
       {withBill ? (
-        <Sheet open={pickerOpen} onClose={closePicker} title="Método de pago">
+        <Sheet open={pickerOpen} onClose={closePicker} title={t("payment")}>
           <div className="grid gap-2">
             {PAYMENT_METHODS.map((method) => (
               <button
@@ -126,15 +124,15 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
                 onClick={() => void call("bill", method)}
                 className="min-h-11 rounded-xl border-2 border-tinta px-4 font-bold text-tinta hover:bg-tinta/[0.04] disabled:opacity-50"
               >
-                {PAYMENT_METHOD_LABEL[method]}
+                {t(PAYMENT_KEYS[method])}
               </button>
             ))}
           </div>
           <div role="status" className="mt-3">
-            {state.kind === "sending" ? <p>Avisando…</p> : null}
+            {state.kind === "sending" ? <p>{t("notifying")}</p> : null}
             {state.kind === "error" && failedMethod ? (
               <p className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">
-                {state.message}
+                {customerError(locale, state)}
               </p>
             ) : null}
           </div>
@@ -144,7 +142,7 @@ export function CallWaiterButtons({ token, withBill }: { token: string; withBill
               onClick={() => void call("bill", failedMethod)}
               className="mt-2 min-h-11 rounded-xl bg-tinta px-4 font-bold text-plato"
             >
-              Reintentar con {PAYMENT_METHOD_LABEL[failedMethod]}
+              {t("retryPayment", { method: t(PAYMENT_KEYS[failedMethod]) })}
             </button>
           ) : null}
         </Sheet>

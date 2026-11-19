@@ -1,9 +1,12 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+import { TranslatedContent } from "./TranslatedContent";
+import { customerError } from "@/lib/i18n";
+import type { ActionError } from "@/lib/action-result";
 import Link from "next/link";
 import { useState } from "react";
 import { cartCount, cartTotal, type CartLineView } from "@/lib/cart";
-import { formatMoney } from "@/lib/money";
 import { NoteField } from "./NoteField";
 import { QuantityStepper } from "./QuantityStepper";
 import { Sheet } from "./Sheet";
@@ -12,7 +15,7 @@ export type SendState =
   | { kind: "idle" }
   | { kind: "sending" }
   | { kind: "sent"; round: number }
-  | { kind: "error"; message: string };
+  | { kind: "error"; code: string; details?: ActionError["details"] };
 
 type Props = {
   open: boolean;
@@ -27,6 +30,7 @@ type Props = {
 };
 
 export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantity, onRemove, onNote }: Props) {
+  const { t, money, locale } = useLanguage();
   const count = cartCount(lines);
   const total = cartTotal(lines);
 
@@ -35,14 +39,14 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
       <Sheet
         open={open}
         onClose={onClose}
-        title={`Pedido enviado · Ronda ${send.round}`}
+        title={t("sentTitle", { round: send.round })}
         footer={
           <button
             type="button"
             onClick={onClose}
             className="flex min-h-13 w-full items-center justify-center rounded-xl border-2 border-tinta px-5 text-lg font-bold text-tinta"
           >
-            Seguir pidiendo
+            {t("keepOrdering")}
           </button>
         }
       >
@@ -53,12 +57,12 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
             </svg>
           </span>
           <div>
-            <p className="text-lg">La cocina ya tiene tu pedido. Puedes seguir su estado en tu cuenta.</p>
+            <p className="text-lg">{t("sentHelp")}</p>
             <Link
               href={`/m/${token}/cuenta`}
               className="mt-3 inline-flex min-h-11 items-center font-bold text-tinta underline decoration-2 underline-offset-4"
             >
-              Ver mi cuenta
+              {t("viewBill")}
             </Link>
           </div>
         </div>
@@ -71,22 +75,22 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
     <Sheet
       open={open}
       onClose={onClose}
-      title="Tu pedido"
-      subtitle={lines.length ? `${count} ${count === 1 ? "plato" : "platos"} por enviar` : undefined}
+      title={t("yourOrder")}
+      subtitle={lines.length ? t(count === 1 ? "pendingOne" : "pendingMany", { count }) : undefined}
       footer={
         lines.length ? (
           <div className="flex flex-col gap-3">
             {send.kind === "error" ? (
               <p role="alert" className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">
-                {send.message}
+                {customerError(locale, send)}
               </p>
             ) : null}
             <div className="flex items-baseline justify-between gap-3">
               <span>
-                <span className="font-bold">Total estimado</span>
-                <span className="block text-sm text-tinta-suave">El valor final aparece en tu cuenta.</span>
+                <span className="font-bold">{t("estimated")}</span>
+                <span className="block text-sm text-tinta-suave">{t("finalHelp")}</span>
               </span>
-              <span className="font-display text-2xl font-semibold tabular-nums">{formatMoney(total)}</span>
+              <span className="font-display text-2xl font-semibold tabular-nums">{money(total)}</span>
             </div>
             <button
               type="button"
@@ -95,7 +99,7 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
               aria-disabled={sending || count === 0}
               className="flex min-h-13 w-full items-center justify-center rounded-xl bg-tinta px-5 text-lg font-bold text-plato hover:bg-[#25365c] disabled:bg-tinta/45"
             >
-              {sending ? "Enviando…" : "Enviar pedido"}
+              {t(sending ? "sending" : "send")}
             </button>
           </div>
         ) : undefined
@@ -103,8 +107,8 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
     >
       {lines.length === 0 ? (
         <div className="py-6">
-          <p className="text-lg">Aún no has agregado platos.</p>
-          <p className="mt-1 text-tinta-suave">Toca un plato del menú para agregarlo a tu pedido.</p>
+          <p className="text-lg">{t("emptyCart")}</p>
+          <p className="mt-1 text-tinta-suave">{t("emptyCartHelp")}</p>
         </div>
       ) : (
         <ul className="-mt-4">
@@ -137,6 +141,7 @@ function CartLineItem({
   onRemove: Props["onRemove"];
   onNote: Props["onNote"];
 }) {
+  const { t, money, locale } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(l.note);
 
@@ -146,17 +151,17 @@ function CartLineItem({
         <span
           className={`font-display text-xl leading-snug font-semibold [font-stretch:87.5%] ${l.unavailable ? "text-tinta-suave" : ""}`}
         >
-          {l.name}
+          <TranslatedContent original={l.name} english={l.nameEn} />
         </span>
         {l.unavailable ? null : (
-          <span className="text-lg whitespace-nowrap tabular-nums">{formatMoney(l.unitPrice * l.quantity)}</span>
+          <span className="text-lg whitespace-nowrap tabular-nums">{money(l.unitPrice * l.quantity)}</span>
         )}
       </div>
 
       {l.unavailable ? (
-        <p className="mt-1 font-bold text-guindilla">Ya no está disponible</p>
+        <p className="mt-1 font-bold text-guindilla">{t("unavailable")}</p>
       ) : l.note && !editing ? (
-        <p className="mt-1 text-tinta-suave">Nota: {l.note}</p>
+        <p className="mt-1 text-tinta-suave">{t("notePrefix", { note: l.note })}</p>
       ) : null}
 
       {editing ? (
@@ -171,7 +176,7 @@ function CartLineItem({
               }}
               className="min-h-11 rounded-lg bg-tinta px-4 font-bold text-plato"
             >
-              Guardar nota
+              {t("saveNote")}
             </button>
             <button
               type="button"
@@ -181,7 +186,7 @@ function CartLineItem({
               }}
               className="min-h-11 rounded-lg px-4 text-tinta underline underline-offset-4"
             >
-              Cancelar
+              {t("cancel")}
             </button>
           </div>
         </div>
@@ -192,7 +197,7 @@ function CartLineItem({
           <QuantityStepper
             value={l.quantity}
             onChange={(n) => onQuantity(l.key, n)}
-            label={l.name}
+            label={locale === "en" && l.nameEn ? l.nameEn : l.name}
           />
         )}
         {l.unavailable || editing ? null : (
@@ -205,7 +210,7 @@ function CartLineItem({
             }}
             className="min-h-11 px-2 text-tinta underline underline-offset-4 disabled:text-tinta-suave"
           >
-            {l.note ? "Editar nota" : "Añadir nota"}
+            {t(l.note ? "editNote" : "addNote")}
           </button>
         )}
         <button
@@ -213,9 +218,9 @@ function CartLineItem({
           disabled={disabled}
           onClick={() => onRemove(l.key)}
           className="ml-auto min-h-11 px-2 text-guindilla underline underline-offset-4 disabled:text-tinta-suave"
-          aria-label={`Quitar ${l.name} del pedido`}
+          aria-label={t("removeItem", { name: locale === "en" && l.nameEn ? l.nameEn : l.name })}
         >
-          Quitar
+          {t("remove")}
         </button>
       </div>
     </li>

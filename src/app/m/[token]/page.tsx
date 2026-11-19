@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { getMenu } from "@/app/actions/order.actions";
 import { CustomerMenu } from "@/components/customer/CustomerMenu";
 import { getCustomerTable } from "@/lib/customer-table";
+import { CustomerHeading, CustomerMessage } from "@/components/customer/LanguageProvider";
 
 export default async function CustomerMenuPage({ params }: PageProps<"/m/[token]">) {
   await connection();
@@ -13,9 +14,9 @@ export default async function CustomerMenuPage({ params }: PageProps<"/m/[token]
 
   return (
     <main className="flex-1 pb-28">
-      <h1 className="sr-only">Menú de la mesa {table.number}</h1>
+      <CustomerHeading number={table.number} />
       {categories.length === 0 ? (
-        <p className="py-10 text-lg text-tinta-suave">El menú todavía no tiene platos. Pide ayuda al mesero.</p>
+        <p className="py-10 text-lg text-tinta-suave"><CustomerMessage message="emptyMenu" /></p>
       ) : (
         <CustomerMenu token={token} categories={categories} />
       )}

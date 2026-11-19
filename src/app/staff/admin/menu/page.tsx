@@ -39,11 +39,13 @@ export default async function AdminMenuPage() {
         <AdminForm intent="category.create" className="flex flex-col gap-3" aria-label="Nueva categoría">
           <div className="flex flex-wrap items-start gap-3">
             <Field name="name" label="Nueva categoría" placeholder="Ej. Sopas" className="min-w-0 flex-1 basis-56" />
+            <Field name="nameEn" label="Nombre en inglés (revisado)" />
             <Field name="sortOrder" label="Orden" type="number" inputMode="numeric" defaultValue="0" className="w-24" />
             <SubmitButton className="mt-7" pendingLabel="Creando…">
               Crear categoría
             </SubmitButton>
           </div>
+          <EnglishReview />
           <FormStatus />
         </AdminForm>
       </section>
@@ -95,6 +97,7 @@ function CategoryRow({ category: c }: { category: Category }) {
           <AdminForm intent="category.update" hidden={{ id: c.id }} closeOnSuccess className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start gap-3">
               <Field name="name" label="Nombre" defaultValue={c.name} className="min-w-0 flex-1 basis-56" />
+              <Field name="nameEn" label="Nombre en inglés (revisado)" defaultValue={c.nameEn ?? ""} />
               <Field
                 name="sortOrder"
                 label="Orden"
@@ -104,6 +107,7 @@ function CategoryRow({ category: c }: { category: Category }) {
                 className="w-24"
               />
             </div>
+            <EnglishReview />
             <FormStatus />
             <SubmitButton className="w-fit">Guardar categoría</SubmitButton>
           </AdminForm>
@@ -209,6 +213,9 @@ function ProductForm({
     >
       <Field name="name" label="Nombre" defaultValue={p?.name} />
       <Field name="description" label="Descripción" defaultValue={p?.description ?? ""} multiline />
+      <Field name="nameEn" label="Nombre en inglés (revisado)" defaultValue={p?.nameEn ?? ""} />
+      <Field name="descriptionEn" label="Descripción en inglés (revisada)" defaultValue={p?.descriptionEn ?? ""} multiline />
+      <EnglishReview />
       <div className="flex flex-wrap items-start gap-3">
         <Field
           name="price"
@@ -242,4 +249,11 @@ function ProductForm({
       </SubmitButton>
     </AdminForm>
   );
+}
+
+function EnglishReview() {
+  return <div className="flex flex-col gap-1">
+    <CheckboxField name="englishReviewed" label="Confirmo la revisión bilingüe y gastronómica del inglés para esta versión en español" />
+    <p className="text-sm text-tinta-suave">Solo guarda traducciones aprobadas. Sin confirmar, los textos ingleses nuevos o cuyo original cambió se descartan. Los borradores se revisan fuera del menú publicado.</p>
+  </div>;
 }

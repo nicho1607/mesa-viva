@@ -63,6 +63,7 @@ describe("toActionError", () => {
       ok: false,
       error: "Revisa tu pedido: la cantidad de cada producto debe estar entre 1 y 20.",
       code: "VALIDATION",
+      details: { issues: ["invalidQuantity"] },
     });
     expect(toActionError(zodError({ token, items: [] })).error).toBe("Revisa tu pedido: agrega al menos un producto.");
     expect(toActionError(zodError({ token, items: [{ productId, quantity: 1, notes: "a".repeat(201) }] })).error).toContain(

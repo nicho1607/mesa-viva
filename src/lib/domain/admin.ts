@@ -9,6 +9,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/domain/errors";
+import { reviewedTranslation } from "@/lib/i18n/review";
 
 export type Actor = { id: string; role: string };
 
@@ -103,13 +104,23 @@ const price = z
     return cents;
   });
 
+const englishText = (max: number) => z.preprocess(
+  (v) => typeof v === "string" ? v.trim() || null : v,
+  z.string().max(max, { error: `Máximo ${max} caracteres` }).nullable().optional(),
+);
+
 export const categoryInput = z.object({
+  nameEn: englishText(120),
+  englishReviewed: bool,
   name: text("Escribe el nombre de la categoría", 60),
   sortOrder,
 });
 export const categoryUpdateInput = categoryInput.extend({ id: id() });
 
 export const productInput = z.object({
+  nameEn: englishText(160),
+  descriptionEn: englishText(600),
+  englishReviewed: bool,
   name: text("Escribe el nombre del producto", 80),
   description: z.preprocess(
     (v) => (typeof v === "string" ? v.trim() || null : null),
@@ -202,16 +213,20 @@ const uniqIds = (...ids: (string | null | undefined)[]) => [...new Set(ids.filte
 
 export async function createCategory(actor: Actor, raw: unknown) {
   assertAdmin(actor);
-  const data = categoryInput.parse(raw);
+  const { englishReviewed, ...data } = categoryInput.parse(raw);
+  data.nameEn = reviewedTranslation(data.name, data.nameEn, englishReviewed);
   return unique(() => db.category.create({ data }), "Ya existe una categoría con ese nombre", "name");
 }
 
 export async function updateCategory(actor: Actor, raw: unknown) {
   assertAdmin(actor);
-  const { id, ...data } = categoryUpdateInput.parse(raw);
-  await mustExist(db.category.findUnique({ where: { id }, select: { id: true } }), "Categoría");
-  return unique(
-    () => db.category.update({ where: { id }, data }),
+  const { id, englishReviewed, ...data } = categoryUpdateInput.parse(raw);
+  return unique(() => db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Category" WHERE id = ${id} FOR UPDATE`;
+    const before = await mustExist(tx.category.findUnique({ where: { id } }), "Categoría");
+    data.nameEn = reviewedTranslation(data.name, data.nameEn, englishReviewed, { original: before.name, english: before.nameEn });
+    return tx.category.update({ where: { id }, data });
+  }),
     "Ya existe una categoría con ese nombre",
     "name",
   );
@@ -242,17 +257,24 @@ async function assertCategory(categoryId: string) {
 
 export async function createProduct(actor: Actor, raw: unknown) {
   assertAdmin(actor);
-  const data = productInput.parse(raw);
+  const { englishReviewed, ...data } = productInput.parse(raw);
+  data.nameEn = reviewedTranslation(data.name, data.nameEn, englishReviewed);
+  data.descriptionEn = reviewedTranslation(data.description, data.descriptionEn, englishReviewed);
   await assertCategory(data.categoryId);
   return db.product.create({ data });
 }
 
 export async function updateProduct(actor: Actor, raw: unknown) {
   assertAdmin(actor);
-  const { id, ...data } = productUpdateInput.parse(raw);
-  await mustExist(db.product.findUnique({ where: { id }, select: { id: true } }), "Producto");
+  const { id, englishReviewed, ...data } = productUpdateInput.parse(raw);
   await assertCategory(data.categoryId);
-  return db.product.update({ where: { id }, data });
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+    const before = await mustExist(tx.product.findUnique({ where: { id } }), "Producto");
+    data.nameEn = reviewedTranslation(data.name, data.nameEn, englishReviewed, { original: before.name, english: before.nameEn });
+    data.descriptionEn = reviewedTranslation(data.description, data.descriptionEn, englishReviewed, { original: before.description, english: before.descriptionEn });
+    return tx.product.update({ where: { id }, data });
+  });
 }
 
 /** "Disponible / Agotado" (y "Retirar del menú" = available false). */
@@ -486,12 +508,15 @@ export async function getAdminMenu(actor: Actor) {
     select: {
       id: true,
       name: true,
+      nameEn: true,
       sortOrder: true,
       products: {
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: {
           id: true,
           name: true,
+          nameEn: true,
+          descriptionEn: true,
           description: true,
           price: true,
           imageUrl: true,

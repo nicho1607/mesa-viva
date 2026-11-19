@@ -43,6 +43,7 @@ export default defineConfig({
       DATABASE_URL: E2E_DATABASE_URL,
       PUBLIC_BASE_URL: BASE_URL,
       NEXT_TELEMETRY_DISABLED: "1",
+      CUSTOMER_ENGLISH_PREVIEW: "false",
     },
   },
 });
