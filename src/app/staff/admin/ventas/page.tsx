@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { parseBillingSettings } from "@/lib/domain/billing";
-import { getClosedSales, salesDateRange } from "@/lib/domain/sales";
+import { getClosedSales, salesDateRange, summarizeSales } from "@/lib/domain/sales";
 import { formatMoney } from "@/lib/money";
 
 const timeZone = "America/Bogota";
@@ -24,7 +24,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/staff/admi
     ? await Promise.all([getClosedSales(range), db.setting.findUnique({ where: { key: "currency" } })])
     : [[], null];
   const { currency } = parseBillingSettings(currencySetting ? [currencySetting] : []);
-  const total = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const { total, cash, transfer, unattributed, unattributedCount } = summarizeSales(sales);
 
   return (
     <section className="space-y-5">
@@ -50,6 +50,11 @@ export default async function SalesPage({ searchParams }: PageProps<"/staff/admi
           <dl className="flex flex-wrap gap-6 tabular-nums">
             <div><dt>Cuentas cerradas</dt><dd className="text-xl font-bold">{sales.length}</dd></div>
             <div><dt>Total cobrado</dt><dd className="text-xl font-bold">{formatMoney(total, currency)}</dd></div>
+            <div><dt>Cobrado registrado en efectivo físico</dt><dd className="text-xl font-bold">{formatMoney(cash, currency)}</dd></div>
+            <div><dt>Cobrado registrado por transferencia</dt><dd className="text-xl font-bold">{formatMoney(transfer, currency)}</dd></div>
+            {unattributedCount > 0 && (
+              <div><dt>Importe sin atribuir</dt><dd className="text-xl font-bold">{formatMoney(unattributed, currency)}</dd></div>
+            )}
           </dl>
           {sales.length === 0 ? <p>No hay ventas en este rango.</p> : (
             <table className="w-full text-left tabular-nums">
