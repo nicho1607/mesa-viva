@@ -101,13 +101,13 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, mobile
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className={`mv-sheet fixed inset-x-0 m-0 mx-auto hidden w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex ${
+      className={`mv-sheet fixed inset-x-0 m-0 mx-auto hidden h-max w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white p-0 text-tinta shadow-[0_-1px_0_rgb(29_43_74/0.12)] backdrop:bg-tinta/55 open:flex ${
         mobileTop
           ? "mv-sheet-mobile-top top-[calc(var(--mv-sheet-top,0px)+1rem)] bottom-auto max-h-[min(92dvh,calc(var(--mv-sheet-height,100dvh)-2rem))] max-sm:w-[calc(100%-2rem)] max-sm:rounded-2xl sm:top-auto sm:bottom-[var(--mv-sheet-bottom,0px)]"
           : "top-auto bottom-[var(--mv-sheet-bottom,0px)] max-h-[min(92dvh,var(--mv-sheet-height,92dvh))]"
       }`}
     >
-      <div className="flex items-start gap-3 border-b border-tinta/10 px-4 pt-4 pb-3">
+      <div className="flex shrink-0 items-start gap-3 border-b border-tinta/10 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="font-display text-2xl leading-tight font-semibold [font-stretch:87.5%]">
             {title}
@@ -125,9 +125,9 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, mobile
           </svg>
         </button>
       </div>
-      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
+      <div ref={bodyRef} className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
       {footer ? (
-        <div className="border-t border-tinta/10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>
+        <div className="shrink-0 border-t border-tinta/10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>
       ) : null}
     </dialog>
   );
