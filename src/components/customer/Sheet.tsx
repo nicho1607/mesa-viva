@@ -4,7 +4,7 @@
 // inerte (trampa de foco), Esc cierra (evento cancel) y el foco vuelve al disparador.
 // Toque en el fondo también cierra. La animación de entrada se desactiva con reduced motion.
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 
 type Props = {
   open: boolean;
@@ -21,14 +21,16 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
   const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
+    if (open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
   }, [open]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = ref.current;
     const body = bodyRef.current;
     const viewport = window.visualViewport;
@@ -39,19 +41,20 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
     const syncViewport = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const field = document.activeElement;
-        // En iOS el teclado reduce el área visible, pero el diálogo fijo sigue anclado al layout.
-        const layoutHeight = document.documentElement.clientHeight;
-        if (!(field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement)
-          || !body.contains(field) || viewport.scale !== 1 || viewport.height >= layoutHeight) {
+        if (viewport.scale !== 1) {
           dialog.style.removeProperty("--mv-sheet-bottom");
           dialog.style.removeProperty("--mv-sheet-height");
           return;
         }
 
-        const bottom = Math.max(0, layoutHeight - viewport.height - viewport.offsetTop);
+        // Las barras de iOS también reducen el área visible sin enfocar un campo.
+        const bottom = Math.max(0, document.documentElement.clientHeight - viewport.height - viewport.offsetTop);
         dialog.style.setProperty("--mv-sheet-bottom", `${bottom}px`);
         dialog.style.setProperty("--mv-sheet-height", `${viewport.height}px`);
+
+        const field = document.activeElement;
+        if (!(field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement)
+          || !body.contains(field)) return;
 
         const bounds = body.getBoundingClientRect();
         const fieldBounds = field.getBoundingClientRect();
@@ -88,8 +91,8 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }: Prop
         e.preventDefault();
         onClose();
       }}
-      onClose={() => {
-        if (open) onClose();
+      onClose={(e) => {
+        if (open && !e.currentTarget.open) onClose();
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
