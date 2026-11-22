@@ -314,7 +314,11 @@ total     = subtotal + impuestos + propina
 | El cliente envía justo cuando el mesero cierra | El cierre bloquea la fila; `addItems` ve `CLOSED` y responde "El servicio de esta mesa ya se cerró. Pide al mesero abrir una nueva cuenta." |
 | Se pierde la conexión WebSocket | Refetch al reconectar/recuperar foco; indicador "Reconectando…". |
 | Mesa sin mesero asignado | La orden queda con `waiterId = null` y se notifica a `staff:floor` (admin). |
-| Producto se agota con el carrito lleno | El servidor rechaza esa línea y devuelve cuáles; la UI las marca. |
+| Producto se agota con el carrito lleno | El servidor rechaza el envío completo y devuelve los productos afectados; la UI conserva el carrito para corregirlo. |
+| Dos mesas piden la última porción | La aceptación bloquea los productos por ID; una reserva y la otra recibe saldo insuficiente. |
+| Se pierde la respuesta de un pedido aceptado | El cliente reintenta el mismo `operationId`; `OrderSubmission` devuelve la misma ronda sin reservar otra vez. |
+
+El inventario cuantitativo controla porciones vendibles, no ingredientes. Sus estados, movimientos y reglas de cancelación están en [`docs/INVENTARIO.md`](INVENTARIO.md).
 
 ---
 

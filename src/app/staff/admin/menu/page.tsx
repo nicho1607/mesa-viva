@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import {
   AdminForm,
@@ -12,6 +13,7 @@ import {
 import { sectionTitle } from "@/components/admin/styles";
 import { requireAdminPage } from "@/lib/auth";
 import { centsToPesosInput, getAdminMenu, type AdminMenu } from "@/lib/domain/admin";
+import { inventoryLabel } from "@/lib/domain/inventory";
 import { formatMoney } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Menú · Administración · Mesa Viva" };
@@ -131,7 +133,8 @@ function CategoryRow({ category: c }: { category: Category }) {
 }
 
 function ProductRow({ product: p, categoryOptions }: { product: Product; categoryOptions: Option[] }) {
-  const ordered = p._count.orderItems > 0;
+  const hasHistory = p._count.orderItems > 0 || p._count.inventoryMovements > 0;
+  const stockLabel = inventoryLabel(p.available, p.availableQuantity);
   return (
     <li className="flex flex-col gap-2 py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -141,6 +144,9 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
               {p.name}
             </span>
             <span className="tabular-nums">{formatMoney(p.price)}</span>
+            <span className={`text-sm font-bold ${p.availableQuantity === 0 || !p.available ? "text-guindilla" : "text-tinta-suave"}`}>
+              {stockLabel}
+            </span>
           </p>
           {p.description ? <p className="line-clamp-2 text-sm text-tinta-suave">{p.description}</p> : null}
         </div>
@@ -150,7 +156,7 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
           field="available"
           value={p.available}
           onLabel="Disponible"
-          offLabel="Agotado"
+          offLabel="No disponible"
           itemLabel={p.name}
         />
       </div>
@@ -158,7 +164,10 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
         <Disclosure summary="Editar" className="open:basis-full">
           <ProductForm intent="product.update" product={p} categoryOptions={categoryOptions} />
         </Disclosure>
-        {ordered ? (
+        <Disclosure summary={p.availableQuantity === null ? "Configurar inventario" : "Ajustar porciones"} className="open:basis-full">
+          <InventoryForm product={p} />
+        </Disclosure>
+        {hasHistory ? (
           p.available ? (
             <Disclosure summary="Retirar del menú" tone="danger" className="open:basis-full">
               <AdminForm
@@ -167,8 +176,7 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
                 className="flex flex-col gap-3"
               >
                 <p className="max-w-prose">
-                  {p.name} ya aparece en pedidos, así que no se puede eliminar. Al retirarlo queda como Agotado y
-                  nadie podrá pedirlo.
+                  {p.name} ya tiene historial. Al retirarlo nadie podrá pedirlo y su saldo no cambiará.
                 </p>
                 <FormStatus />
                 <SubmitButton variant="danger" pendingLabel="Retirando…" className="w-fit">
@@ -180,7 +188,7 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
         ) : (
           <Disclosure summary="Eliminar" tone="danger" className="open:basis-full">
             <AdminForm intent="product.delete" hidden={{ id: p.id }} className="flex flex-col gap-3">
-              <p>Se eliminará {p.name} para siempre. Nunca se ha pedido.</p>
+              <p>Se eliminará {p.name} para siempre. Nunca se ha pedido ni ha tenido inventario.</p>
               <FormStatus />
               <SubmitButton variant="danger" pendingLabel="Eliminando…" className="w-fit">
                 Eliminar producto
@@ -191,6 +199,88 @@ function ProductRow({ product: p, categoryOptions }: { product: Product; categor
       </div>
     </li>
   );
+}
+
+function InventoryForm({ product: p }: { product: Product }) {
+  if (p.availableQuantity === null) {
+    return (
+      <AdminForm
+        intent="product.inventory.open"
+        hidden={{ id: p.id, operationId: randomUUID() }}
+        closeOnSuccess
+        className="flex max-w-lg flex-col gap-3"
+      >
+        <p className="text-sm text-tinta-suave">
+          Registra las porciones que pueden venderse ahora. Los pedidos anteriores no se descuentan retroactivamente.
+        </p>
+        <Field name="quantity" label="Saldo inicial" type="number" inputMode="numeric" defaultValue="0" />
+        <FormStatus />
+        <SubmitButton className="w-fit">Iniciar inventario</SubmitButton>
+      </AdminForm>
+    );
+  }
+  return (
+    <div className="flex max-w-xl flex-col gap-4">
+      <AdminForm
+        intent="product.inventory.adjust"
+        hidden={{ id: p.id, operationId: randomUUID() }}
+        closeOnSuccess
+        className="flex flex-col gap-3"
+      >
+        <p>
+          Saldo actual: <strong className="tabular-nums">{p.availableQuantity}</strong> porciones. Usa un número positivo
+          para reponer o negativo para corregir. Las cancelaciones no devuelven porciones automáticamente.
+        </p>
+        <div className="flex flex-wrap items-start gap-3">
+          <Field
+            name="delta"
+            label="Ajuste"
+            type="number"
+            inputMode="numeric"
+            placeholder="Ej. 5 o -2"
+            className="w-40"
+          />
+          <Field name="reason" label="Motivo" placeholder="Ej. Reposición de cocina" className="min-w-0 flex-1 basis-56" />
+        </div>
+        <FormStatus />
+        <SubmitButton className="w-fit">Aplicar ajuste</SubmitButton>
+      </AdminForm>
+      {p.inventoryMovements.length ? (
+        <div>
+          <h4 className="font-bold">Movimientos recientes</h4>
+          <ul className="mt-1 divide-y divide-tinta/12 text-sm">
+            {p.inventoryMovements.map((m) => (
+              <li key={m.id} className="flex flex-wrap justify-between gap-x-4 py-2">
+                <span>
+                  {movementLabel(m.type)}: <strong className="tabular-nums">{m.delta > 0 ? `+${m.delta}` : m.delta}</strong>
+                  {m.reason ? ` · ${m.reason}` : ""}
+                </span>
+                <span className="text-tinta-suave">
+                  saldo {m.balanceAfter} · {m.actor?.name ?? "Pedido"} · {formatInventoryDate(m.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function movementLabel(type: Product["inventoryMovements"][number]["type"]): string {
+  if (type === "OPENING") return "Apertura";
+  if (type === "RESERVATION") return "Reserva";
+  return "Ajuste";
+}
+
+function formatInventoryDate(date: Date): string {
+  return new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function ProductForm({

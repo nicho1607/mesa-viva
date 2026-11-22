@@ -5,7 +5,7 @@
 // Reusa la lógica pura del carrito (`@/lib/cart`) y los campos del cliente (NoteField, QuantityStepper).
 
 import { useQuery } from "@tanstack/react-query";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { getMenu } from "@/app/actions/order.actions";
 import { addItemsForTableAction } from "@/app/actions/table.actions";
 import { NoteField } from "@/components/customer/NoteField";
@@ -42,6 +42,7 @@ export function AddItemsSheet({ open, onClose, tableId, tableNumber, currency, o
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<number | null>(null);
+  const operationRef = useRef<{ id: string; fingerprint: string } | null>(null);
 
   const visible = useMemo(() => {
     const q = fold(query.trim());
@@ -59,15 +60,45 @@ export function AddItemsSheet({ open, onClose, tableId, tableNumber, currency, o
   }
 
   async function send() {
+    const items = toSubmitItems(draft);
+    const fingerprint = JSON.stringify(items);
+    const pending = operationRef.current?.fingerprint === fingerprint
+      ? operationRef.current
+      : { id: crypto.randomUUID(), fingerprint };
+    operationRef.current = pending;
     setSending(true);
     setError(null);
-    const r = await addItemsForTableAction(tableId, toSubmitItems(draft));
-    setSending(false);
-    if (!r.ok) {
-      setError(r.error);
-      if (r.code === "UNAVAILABLE_PRODUCTS") void menu.refetch();
+    let r: Awaited<ReturnType<typeof addItemsForTableAction>>;
+    try {
+      r = await addItemsForTableAction(tableId, items, pending.id);
+    } catch {
+      setSending(false);
+      setError("No hay conexión. Reintenta la misma ronda.");
       return;
     }
+    setSending(false);
+    if (!r.ok) {
+      if (r.code === "INSUFFICIENT_STOCK" && r.details?.shortages?.length) {
+        const products = (menu.data ?? []).flatMap((c) => c.products);
+        if (r.details.shortages.length === 1) {
+          const shortage = r.details.shortages[0];
+          const name = products.find((p) => p.id === shortage.productId)?.name ?? "Este producto";
+          setError(shortage.available === 0
+            ? `${name} se agotó. Quítalo de la ronda.`
+            : `Solo quedan ${shortage.available} porciones de ${name}. Cambia la cantidad.`);
+        } else {
+          setError(r.details.shortages.map((shortage) => {
+            const name = products.find((p) => p.id === shortage.productId)?.name ?? "Producto";
+            return `${name}: pediste ${shortage.requested}, quedan ${shortage.available}`;
+          }).join(" · "));
+        }
+      } else {
+        setError(r.error);
+      }
+      if (r.code === "UNAVAILABLE_PRODUCTS" || r.code === "INSUFFICIENT_STOCK") void menu.refetch();
+      return;
+    }
+    operationRef.current = null;
     setDraft([]);
     setExpanded(null);
     setSent(r.data.round);
@@ -104,7 +135,10 @@ export function AddItemsSheet({ open, onClose, tableId, tableNumber, currency, o
                   </span>
                   <button
                     type="button"
-                    onClick={() => setDraft((d) => removeLine(d, l.key))}
+                    onClick={() => {
+                      operationRef.current = null;
+                      setDraft((d) => removeLine(d, l.key));
+                    }}
                     className="min-h-11 rounded-md px-2 text-sm font-bold text-guindilla hover:bg-guindilla/8"
                     aria-label={`Quitar ${l.name}`}
                   >
@@ -189,6 +223,7 @@ export function AddItemsSheet({ open, onClose, tableId, tableNumber, currency, o
                       expanded={expanded === p.id}
                       onToggle={() => setExpanded((e) => (e === p.id ? null : p.id))}
                       onAdd={(quantity, note) => {
+                        operationRef.current = null;
                         setDraft((d) =>
                           addLine(d, { productId: p.id, name: p.name, unitPrice: p.price, quantity, note }),
                         );
@@ -233,6 +268,11 @@ function ProductRow({
       ) : (
         <span className="font-bold whitespace-nowrap text-guindilla">Agotado</span>
       )}
+      {p.available && p.availableQuantity !== null ? (
+        <span className="text-sm whitespace-nowrap text-tinta-suave">
+          Quedan <span className="tabular-nums">{p.availableQuantity}</span>
+        </span>
+      ) : null}
     </span>
   );
   if (!p.available) return <div className="py-3">{head}</div>;

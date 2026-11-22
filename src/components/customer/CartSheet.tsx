@@ -33,6 +33,10 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
   const { t, money, locale } = useLanguage();
   const count = cartCount(lines);
   const total = cartTotal(lines);
+  const productName = (productId: string) => {
+    const line = lines.find((item) => item.productId === productId);
+    return locale === "en" && line?.nameEn ? line.nameEn : (line?.name ?? (locale === "en" ? "this dish" : "este plato"));
+  };
 
   if (send.kind === "sent") {
     return (
@@ -81,9 +85,22 @@ export function CartSheet({ open, onClose, token, lines, send, onSend, onQuantit
         lines.length ? (
           <div className="flex flex-col gap-3">
             {send.kind === "error" ? (
-              <p role="alert" className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">
-                {customerError(locale, send)}
-              </p>
+              <div role="alert" className="rounded-lg border-l-4 border-guindilla bg-guindilla/8 px-3 py-2 text-tinta">
+                <p>{customerError(locale, send, productName)}</p>
+                {(send.details?.shortages?.length ?? 0) > 1 ? (
+                  <ul className="mt-1 list-disc pl-5">
+                    {send.details!.shortages!.map((shortage) => (
+                      <li key={shortage.productId}>
+                        {t("stockDetail", {
+                          name: productName(shortage.productId),
+                          requested: shortage.requested,
+                          available: shortage.available,
+                        })}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
             <div className="flex items-baseline justify-between gap-3">
               <span>

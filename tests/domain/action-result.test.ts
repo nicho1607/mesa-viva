@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GENERIC_ERROR, toActionError } from "@/lib/action-result";
-import { InvalidTableError, OrderClosedError, UnavailableProductsError } from "@/lib/domain/errors";
+import { InsufficientStockError, InvalidTableError, OrderClosedError, UnavailableProductsError } from "@/lib/domain/errors";
 import { z } from "zod";
 import { RateLimitError } from "@/lib/rate-limit";
 
@@ -46,6 +46,18 @@ describe("toActionError", () => {
       error: "Algunos productos ya no están disponibles",
       code: "UNAVAILABLE_PRODUCTS",
       details: { productIds: ["p1", "p2"] },
+    });
+  });
+
+  it("InsufficientStockError conserva solicitado y disponible", () => {
+    expect(toActionError(new InsufficientStockError([{ productId: "p1", requested: 3, available: 2 }]))).toEqual({
+      ok: false,
+      error: "Solo quedan 2 porciones. Cambia la cantidad y vuelve a enviar el pedido.",
+      code: "INSUFFICIENT_STOCK",
+      details: {
+        productIds: ["p1"],
+        shortages: [{ productId: "p1", requested: 3, available: 2 }],
+      },
     });
   });
 

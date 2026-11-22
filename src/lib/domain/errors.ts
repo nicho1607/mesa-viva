@@ -17,11 +17,26 @@ export class OrderClosedError extends DomainError {
   }
 }
 
-/** Algún producto pedido no existe o está agotado (`available = false`). */
+/** Algún producto pedido no existe o está retirado (`available = false`). */
 export class UnavailableProductsError extends DomainError {
   readonly code = "UNAVAILABLE_PRODUCTS";
   constructor(public readonly productIds: string[]) {
     super("Algunos productos ya no están disponibles");
+  }
+}
+export type StockShortage = { productId: string; requested: number; available: number };
+/** La solicitud completa excede las porciones vendibles de uno o más productos. */
+export class InsufficientStockError extends DomainError {
+  readonly code = "INSUFFICIENT_STOCK";
+  constructor(public readonly shortages: StockShortage[]) {
+    const first = shortages[0];
+    super(
+      shortages.length === 1 && first
+        ? first.available === 0
+          ? "Este producto se agotó. Quítalo del pedido para continuar."
+          : `Solo quedan ${first.available} porciones. Cambia la cantidad y vuelve a enviar el pedido.`
+        : "No quedan suficientes porciones de algunos productos. Revisa las cantidades.",
+    );
   }
 }
 

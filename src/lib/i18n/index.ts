@@ -43,11 +43,23 @@ export function validationKey(issue: { path: PropertyKey[]; code: string }): Mes
   return "invalidData";
 }
 
-export function customerError(locale: Locale, error: Pick<ActionError, "code" | "details">): string {
+export function customerError(
+  locale: Locale,
+  error: Pick<ActionError, "code" | "details">,
+  productName: (productId: string) => string = () => locale === "en" ? "this dish" : "este plato",
+): string {
   const keys: Record<string, MessageKey> = {
     NETWORK: "networkError", UNAVAILABLE_PRODUCTS: "unavailableError", ORDER_CLOSED: "orderClosed",
     INVALID_TABLE: "invalidTitle", RATE_LIMITED: "rateLimit", CALL_RATE_LIMITED: "callRateLimit", CALL_FAILED: "callError",
   };
+  if (error.code === "INSUFFICIENT_STOCK") {
+    const shortages = error.details?.shortages ?? [];
+    if (shortages.length !== 1) return translate(locale, "stockManyError");
+    const name = productName(shortages[0].productId);
+    return shortages[0].available === 0
+      ? translate(locale, "stockEmptyError", { name })
+      : translate(locale, "stockRemainingError", { count: shortages[0].available, name });
+  }
   if (error.code === "VALIDATION") {
     const issues = error.details?.issues ?? ["invalidData"];
     return translate(locale, "validation", { issues: issues.map((key) => translate(locale, key)).join("; ") });

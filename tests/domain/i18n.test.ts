@@ -41,6 +41,14 @@ describe("idiomas del cliente", () => {
     expect(customerError("en", { code: "__proto__" })).toBe(en.internal);
     expect(customerError("en", { code: "ORDER_CLOSED" })).toBe(en.orderClosed);
     expect(customerError("en", { code: "CALL_RATE_LIMITED" })).toBe(en.callRateLimit);
+    expect(customerError("es", {
+      code: "INSUFFICIENT_STOCK",
+      details: { shortages: [{ productId: "p", requested: 3, available: 2 }] },
+    }, () => "Ajiaco")).toBe("Solo quedan 2 porciones de Ajiaco. Cambia la cantidad y vuelve a enviar el pedido.");
+    expect(customerError("en", {
+      code: "INSUFFICIENT_STOCK",
+      details: { shortages: [{ productId: "p", requested: 1, available: 0 }] },
+    }, () => "Ajiaco soup")).toBe("Ajiaco soup is sold out. Remove it from your order to continue.");
     const result = z.object({ items: z.array(z.object({ quantity: z.number().min(1) })) }).safeParse({ items: [{ quantity: 0 }] });
     if (result.success) throw new Error("se esperaba error");
     const error = toActionError(result.error);

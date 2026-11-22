@@ -38,7 +38,15 @@ const HANDLERS = {
   "product.update": async (a, d) => (await admin.updateProduct(a, d), { message: "Producto guardado", paths: MENU }),
   "product.available": async (a, d) => {
     const p = await admin.setProductAvailable(a, d);
-    return { message: p.available ? "Marcado como disponible" : "Marcado como agotado", paths: MENU };
+    return { message: p.available ? "Marcado como disponible" : "Marcado como no disponible", paths: MENU };
+  },
+  "product.inventory.open": async (a, d) => {
+    const p = await admin.openProductInventory(a, d);
+    return { message: `Inventario iniciado con ${p.availableQuantity} porciones`, paths: MENU };
+  },
+  "product.inventory.adjust": async (a, d) => {
+    const p = await admin.adjustProductInventory(a, d);
+    return { message: `Saldo actualizado: ${p.availableQuantity} porciones`, paths: MENU };
   },
   "product.delete": async (a, d) => (await admin.deleteProduct(a, d), { message: "Producto eliminado", paths: MENU }),
   "zone.create": floorOp(admin.createZone, "Zona creada"),

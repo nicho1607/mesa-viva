@@ -78,7 +78,7 @@ export async function setItemStatusAction(
   try {
     const user = await requireStaff();
     const r = await staffSetItemStatus(user, { itemId, status });
-    await publishStatusChange(r);
+    if (r.changed) await publishStatusChange(r);
     return { ok: true, data: { status: r.status } };
   } catch (e) {
     return fail(e);
@@ -90,7 +90,7 @@ export async function cancelItemAction(itemId: string): Promise<ActionResult<{ s
   try {
     const user = await requireStaff();
     const r = await staffCancelItem(user, { itemId });
-    await publishStatusChange(r);
+    if (r.changed) await publishStatusChange(r);
     return { ok: true, data: { status: r.status } };
   } catch (e) {
     return fail(e);
@@ -101,10 +101,11 @@ export async function cancelItemAction(itemId: string): Promise<ActionResult<{ s
 export async function addItemsForTableAction(
   tableId: string,
   items: SubmitOrderItem[],
+  operationId?: string,
 ): Promise<ActionResult<{ orderId: string; round: number }>> {
   try {
     const user = await requireStaff();
-    const r = await staffAddItems(user, { tableId, items });
+    const r = await staffAddItems(user, { tableId, items, operationId });
     await publishOrderEvent({
       tableId: r.tableId,
       waiterId: r.waiterId,

@@ -20,7 +20,7 @@ I built this project with **Claude Code**, an AI coding agent. I defined what to
 
 - **Customer** (`/m/{token}`): Spanish and English menu, notes for the kitchen, ordering in rounds, a live bill, and buttons to call the waiter or ask for the bill. English translations display a pending-review notice.
 - **Waiter** (`/staff`): floor plan of their tables with real-time alerts; confirm, serve and close with a tip.
-- **Admin** (`/staff/admin`): menu, tables, zones, staff and QR codes.
+- **Admin** (`/staff/admin`): menu, portion inventory, tables, zones, staff and QR codes.
 
 ### Architecture in 30 seconds
 
@@ -35,8 +35,9 @@ Server Action → transaction (SELECT … FOR UPDATE) → commit → pg_notify
 - **One open order per table**, enforced by a partial unique index in Postgres (`WHERE status = 'OPEN'`), not by application code. Prisma can't express partial indexes, so it lives in hand-written SQL in the migration.
 - **Events carry no prices.** They only say what changed; the browser refetches through an authorized server endpoint.
 - **The server computes every price.** Money is stored in cents, and each order item copies the name and price at the time of ordering, so an open bill doesn't change if the menu does.
+- **Portions cannot be oversold.** Postgres locks inventory rows while accepting an order. A retry key prevents a lost response from reserving the same portions twice.
 
-Full architecture: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) (Spanish). Data model: [`docs/diagramas/modelo-datos.png`](docs/diagramas/modelo-datos.png).
+Full architecture: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) (Spanish). Portion inventory rules: [`docs/INVENTARIO.md`](docs/INVENTARIO.md) (Spanish). Data model: [`docs/diagramas/modelo-datos.png`](docs/diagramas/modelo-datos.png).
 
 ### Run it locally
 
@@ -72,11 +73,11 @@ Demo users (development only): `admin@mesaviva.co` / `admin123` · `laura@mesavi
 
 ### Tests
 
-| Command | What it runs | Last result (local, 2026-11-01) |
+| Command | What it runs | Last result |
 |---|---|---|
-| `npm run typecheck` | `next typegen` + `tsc` | no errors |
-| `npm test` | Vitest, unit + integration against `TEST_DATABASE_URL` | 201 / 201 in 13.9 s |
-| `npm run test:e2e` | Playwright: full customer + waiter flow, concurrency, permissions. Builds, starts on :3300 and **wipes `E2E_DATABASE_URL`** on every run | 5 / 5 |
+| `npm run typecheck` | `next typegen` + `tsc` | no errors (local, 2026-11-21) |
+| `npm test` | Vitest, unit + integration against `TEST_DATABASE_URL` | 258 / 258 (local, 2026-11-21) |
+| `npm run test:e2e` | Playwright: full customer + waiter flow, concurrency, permissions. Builds, starts on :3300 and **wipes `E2E_DATABASE_URL`** on every run | 5 / 5 (local, 2026-11-01) |
 
 ### Known limitations
 
@@ -101,15 +102,16 @@ Construí este proyecto con **Claude Code**, un agente de programación. Yo defi
 
 - **Cliente** (`/m/{token}`): menú en español e inglés, notas para cocina, pedido por rondas, cuenta en vivo, llamar al mesero o pedir la cuenta. Las traducciones inglesas muestran un aviso de revisión pendiente.
 - **Mesero** (`/staff`): plano de sus mesas con alertas en tiempo real; confirmar, servir y cerrar con propina.
-- **Admin** (`/staff/admin`): menú, mesas, zonas, equipo y códigos QR.
+- **Admin** (`/staff/admin`): menú, inventario de porciones, mesas, zonas, equipo y códigos QR.
 
 ### Arquitectura en 30 segundos
 
 - **Una orden abierta por mesa**, garantizada por un índice único parcial en Postgres (`WHERE status = 'OPEN'`), no por el código. Prisma no soporta índices parciales, así que vive en SQL escrito a mano dentro de la migración.
 - **Los eventos no llevan precios.** Solo dicen qué cambió, y el navegador vuelve a pedir los datos a un endpoint con autorización.
 - **El servidor calcula todos los precios.** El dinero se guarda en centavos, y cada ítem copia el nombre y el precio del momento del pedido, así una cuenta abierta no cambia si cambia el menú.
+- **No se sobrevenden porciones.** PostgreSQL bloquea el inventario al aceptar un pedido y una clave de reintento evita reservar dos veces si se pierde la respuesta.
 
-Arquitectura completa: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+Arquitectura completa: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md). Reglas de inventario: [`docs/INVENTARIO.md`](docs/INVENTARIO.md).
 
 ### Correrlo en local
 
@@ -117,7 +119,7 @@ Requiere Node.js 22+ y PostgreSQL local (probado con la 18). Los comandos son lo
 
 ### Pruebas
 
-`npm run typecheck` (sin errores) · `npm test` (201 / 201 en 13,9 s) · `npm run test:e2e` (5 / 5; **borra `E2E_DATABASE_URL`** en cada corrida). Medido en local el 2026-11-01.
+`npm run typecheck` (sin errores) · `npm test` (258 / 258) · `npm run test:e2e` (5 / 5; **borra `E2E_DATABASE_URL`** en cada corrida). Unitarias, integración y tipos validados localmente el 2026-11-21; E2E el 2026-11-01.
 
 ### Limitaciones conocidas
 

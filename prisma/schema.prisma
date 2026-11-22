@@ -48,6 +48,17 @@ enum PaymentMethod {
   MIXED
 }
 
+enum SubmissionSource {
+  CUSTOMER
+  STAFF
+}
+
+enum InventoryMovementType {
+  OPENING
+  RESERVATION
+  ADJUSTMENT
+}
+
 model User {
   id           String   @id @default(uuid())
   passwordHash String // bcrypt
@@ -59,6 +70,7 @@ model User {
   tables       Table[]  @relation("DirectAssignment")
   orders       Order[]  @relation("OrderWaiter")
   closedBills  Bill[]
+  inventoryMovements InventoryMovement[]
   createdAt    DateTime @default(now())
 }
 
@@ -84,6 +96,7 @@ model Table {
   waiterId        String? // anula al mesero de la zona
   waiter          User?            @relation("DirectAssignment", fields: [waiterId], references: [id])
   orders          Order[]
+  submissions     OrderSubmission[]
 }
 
 model Category {
@@ -102,11 +115,13 @@ model Product {
   description String?
   price       Int // centavos
   imageUrl    String?
-  available   Boolean     @default(true) // "agotado" sin borrarlo
+  available   Boolean     @default(true) // control manual: publicado/retirado
+  availableQuantity Int? // null = sin control; entero >= 0 = porciones vendibles
   sortOrder   Int         @default(0)
   categoryId  String
   category    Category    @relation(fields: [categoryId], references: [id])
   orderItems  OrderItem[]
+  inventoryMovements InventoryMovement[]
 
   @@index([categoryId, available])
 }
@@ -121,6 +136,7 @@ model Order {
   version   Int         @default(0) // se incrementa en cada cambio; viaja en los eventos
   lastRound Int         @default(0)
   items     OrderItem[]
+  submissions OrderSubmission[]
   bill      Bill?
   openedAt  DateTime    @default(now())
   closedAt  DateTime?
@@ -147,6 +163,44 @@ model OrderItem {
   servedAt    DateTime?
 
   @@index([orderId, round])
+}
+
+model OrderSubmission {
+  id          String           @id // UUID generado por el cliente; clave de idempotencia
+  tableId     String
+  table       Table            @relation(fields: [tableId], references: [id])
+  orderId     String
+  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  round       Int
+  version     Int
+  isNew       Boolean
+  requestHash String
+  source      SubmissionSource
+  createdAt   DateTime         @default(now())
+  inventoryMovements InventoryMovement[]
+
+  @@unique([orderId, round])
+  @@index([tableId, createdAt])
+}
+
+model InventoryMovement {
+  id            String                @id @default(uuid())
+  productId     String
+  product       Product               @relation(fields: [productId], references: [id])
+  submissionId  String?
+  submission    OrderSubmission?      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  actorId       String?
+  actor         User?                 @relation(fields: [actorId], references: [id])
+  operationId   String?               @unique // idempotencia de ajustes administrativos
+  type          InventoryMovementType
+  delta         Int
+  balanceBefore Int
+  balanceAfter  Int
+  reason        String?               @db.VarChar(200)
+  createdAt     DateTime              @default(now())
+
+  @@unique([submissionId, productId])
+  @@index([productId, createdAt])
 }
 
 model Bill {

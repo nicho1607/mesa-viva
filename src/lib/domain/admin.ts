@@ -166,6 +166,19 @@ export const userInput = z.object({
 const idOnly = z.object({ id: id() });
 const toggle = z.object({ id: id(), active: bool });
 const availability = z.object({ id: id(), available: bool });
+const inventoryOpeningInput = z.object({
+  id: id("Producto no válido"),
+  quantity: int("Escribe un saldo entero entre 0 y 1.000.000", 0, 1_000_000),
+  operationId: id("Operación no válida"),
+});
+const inventoryAdjustmentInput = z.object({
+  id: id("Producto no válido"),
+  delta: int("El ajuste debe ser un entero distinto de cero", -1_000_000, 1_000_000).refine((n) => n !== 0, {
+    message: "El ajuste debe ser distinto de cero",
+  }),
+  reason: text("Explica brevemente el ajuste", 200),
+  operationId: id("Operación no válida"),
+});
 const passwordReset = z.object({ id: id(), password });
 
 // ───────────────────────── Utilidades ─────────────────────────
@@ -277,24 +290,111 @@ export async function updateProduct(actor: Actor, raw: unknown) {
   });
 }
 
-/** "Disponible / Agotado" (y "Retirar del menú" = available false). */
+/** Control manual "Disponible / No disponible", independiente del saldo de porciones. */
 export async function setProductAvailable(actor: Actor, raw: unknown) {
   assertAdmin(actor);
   const { id, available } = availability.parse(raw);
-  await mustExist(db.product.findUnique({ where: { id }, select: { id: true } }), "Producto");
-  return db.product.update({ where: { id }, data: { available }, select: { id: true, available: true } });
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+    await mustExist(tx.product.findUnique({ where: { id }, select: { id: true } }), "Producto");
+    return tx.product.update({ where: { id }, data: { available }, select: { id: true, available: true } });
+  });
 }
 
-/** Borrado definitivo solo si nunca se pidió; si no, hay que retirarlo del menú. */
+/** Activa una sola vez el control cuantitativo y registra su saldo de apertura. */
+export async function openProductInventory(actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const { id, quantity, operationId } = inventoryOpeningInput.parse(raw);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+    const replay = await tx.inventoryMovement.findUnique({ where: { operationId } });
+    if (replay) {
+      if (replay.productId !== id || replay.type !== "OPENING" || replay.delta !== quantity) {
+        throw new ConflictError("Este identificador de operación ya se usó con otro ajuste.");
+      }
+      return { productId: id, availableQuantity: replay.balanceAfter };
+    }
+    const product = await mustExist(
+      tx.product.findUnique({ where: { id }, select: { availableQuantity: true } }),
+      "Producto",
+    );
+    if (product.availableQuantity !== null) {
+      throw new ConflictError("Este producto ya tiene inventario configurado.", "quantity");
+    }
+    await tx.product.update({ where: { id }, data: { availableQuantity: quantity } });
+    await tx.inventoryMovement.create({
+      data: {
+        productId: id,
+        actorId: actor.id,
+        operationId,
+        type: "OPENING",
+        delta: quantity,
+        balanceBefore: 0,
+        balanceAfter: quantity,
+        reason: "Saldo inicial",
+      },
+    });
+    return { productId: id, availableQuantity: quantity };
+  });
+}
+
+/** Suma o resta porciones; nunca permite que el saldo quede negativo. */
+export async function adjustProductInventory(actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const { id, delta, reason, operationId } = inventoryAdjustmentInput.parse(raw);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+    const replay = await tx.inventoryMovement.findUnique({ where: { operationId } });
+    if (replay) {
+      if (replay.productId !== id || replay.type !== "ADJUSTMENT" || replay.delta !== delta || replay.reason !== reason) {
+        throw new ConflictError("Este identificador de operación ya se usó con otro ajuste.");
+      }
+      return { productId: id, availableQuantity: replay.balanceAfter };
+    }
+    const product = await mustExist(
+      tx.product.findUnique({ where: { id }, select: { availableQuantity: true } }),
+      "Producto",
+    );
+    if (product.availableQuantity === null) {
+      throw new ConflictError("Configura primero el saldo inicial de este producto.", "delta");
+    }
+    const after = product.availableQuantity + delta;
+    if (after < 0) {
+      throw new ConflictError(
+        `No puedes retirar ${Math.abs(delta)} porciones: solo quedan ${product.availableQuantity}.`,
+        "delta",
+      );
+    }
+    await tx.product.update({ where: { id }, data: { availableQuantity: after } });
+    await tx.inventoryMovement.create({
+      data: {
+        productId: id,
+        actorId: actor.id,
+        operationId,
+        type: "ADJUSTMENT",
+        delta,
+        balanceBefore: product.availableQuantity,
+        balanceAfter: after,
+        reason,
+      },
+    });
+    return { productId: id, availableQuantity: after };
+  });
+}
+
+/** Borrado definitivo solo si nunca se pidió ni tuvo movimientos; si no, hay que retirarlo del menú. */
 export async function deleteProduct(actor: Actor, raw: unknown) {
   assertAdmin(actor);
   const { id } = idOnly.parse(raw);
   const p = await mustExist(
-    db.product.findUnique({ where: { id }, select: { _count: { select: { orderItems: true } } } }),
+    db.product.findUnique({
+      where: { id },
+      select: { _count: { select: { orderItems: true, inventoryMovements: true } } },
+    }),
     "Producto",
   );
-  if (p._count.orderItems > 0) {
-    throw new ConflictError("Este producto ya aparece en pedidos: retíralo del menú en lugar de eliminarlo.");
+  if (p._count.orderItems > 0 || p._count.inventoryMovements > 0) {
+    throw new ConflictError("Este producto ya tiene historial: retíralo del menú en lugar de eliminarlo.");
   }
   await db.product.delete({ where: { id } });
   return { id };
@@ -521,9 +621,23 @@ export async function getAdminMenu(actor: Actor) {
           price: true,
           imageUrl: true,
           available: true,
+          availableQuantity: true,
           sortOrder: true,
           categoryId: true,
-          _count: { select: { orderItems: true } },
+          inventoryMovements: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              type: true,
+              delta: true,
+              balanceAfter: true,
+              reason: true,
+              createdAt: true,
+              actor: { select: { name: true } },
+            },
+          },
+          _count: { select: { orderItems: true, inventoryMovements: true } },
         },
       },
     },

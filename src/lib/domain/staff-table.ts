@@ -283,7 +283,7 @@ export async function getTableDetailForStaff(
 
 const roundInput = z.object({ orderId: z.uuid(), round: z.number().int().min(1).max(10_000) });
 const itemStatusInput = z.object({ itemId: z.uuid(), status: z.enum(["IN_PREPARATION", "SERVED", "CANCELLED"]) });
-const staffAddInput = z.object({ tableId: z.uuid(), items: orderItemsInput });
+const staffAddInput = z.object({ tableId: z.uuid(), items: orderItemsInput, operationId: z.uuid().optional() });
 /** Propina como fracción (0.1 = 10 %), máx. 100 %, redondeada a 4 decimales (Decimal(5,4)). */
 const closeInput = z.object({
   orderId: z.uuid(),
@@ -324,9 +324,9 @@ export async function staffCancelItem(user: StaffActor, raw: unknown): Promise<I
 }
 
 export async function staffAddItems(user: StaffActor, raw: unknown): Promise<AddItemsResult> {
-  const { tableId, items } = staffAddInput.parse(raw);
+  const { tableId, items, operationId } = staffAddInput.parse(raw);
   await assertCanActOnTable(user, tableId, "manage");
-  return addItemsToOrderByTableId({ tableId, items });
+  return addItemsToOrderByTableId({ tableId, items, operationId });
 }
 
 export async function staffCloseService(user: StaffActor, raw: unknown): Promise<CloseOrderResult> {

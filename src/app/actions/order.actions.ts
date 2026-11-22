@@ -43,10 +43,11 @@ export type SubmitOrderItem = { productId: string; quantity: number; notes?: str
 export async function submitOrder(
   token: string,
   items: SubmitOrderItem[],
+  operationId?: string,
 ): Promise<ActionResult<{ orderId: string; round: number }>> {
   try {
     enforceRateLimit(submitLimiter(), rateKey(token));
-    const r = await addItemsToOrder({ token, items });
+    const r = await addItemsToOrder({ token, items, operationId });
     await publishOrderEvent({
       tableId: r.tableId,
       waiterId: r.waiterId,

@@ -8,7 +8,7 @@ const local = { NODE_ENV: "development", CUSTOMER_ENGLISH_PREVIEW: "true" } as c
 const menu: MenuCategory[] = [{
   id: "category", name: "Entradas", nameEn: null,
   products: [{ id: "dish", name: drafts.products[0].sourceName, description: drafts.products[0].sourceDescription,
-    nameEn: null, descriptionEn: null, price: 1200000, imageUrl: null, available: false }],
+    nameEn: null, descriptionEn: null, price: 1200000, imageUrl: null, available: false, availableQuantity: null }],
 }];
 
 describe("catálogo publicado con revisión pendiente", () => {

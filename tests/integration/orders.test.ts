@@ -281,7 +281,8 @@ describe("acciones del mesero", () => {
     const soda = await db.orderItem.findFirstOrThrow({ where: { orderId: r.orderId, productId: f.soda.id } });
     const c = await cancelItem(soda.id);
     expect(c).toMatchObject({ itemId: soda.id, status: "CANCELLED", version: 2 });
-    await expect(cancelItem(soda.id)).rejects.toBeInstanceOf(InvalidTransitionError);
+    const retried = await cancelItem(soda.id);
+    expect(retried).toMatchObject({ status: "CANCELLED", changed: false, version: c.version });
 
     const { bill } = await closeOrder(r.orderId, f.staffId);
     expect(bill.subtotal).toBe(f.burger.price);

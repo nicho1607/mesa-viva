@@ -23,12 +23,14 @@ import { CategoryTabs } from "./CategoryTabs";
 import { DishSheet } from "./DishSheet";
 import { MenuList } from "./MenuList";
 import { useCart } from "./use-cart";
+import { useOrderOperation } from "./use-order-operation";
 
 type Props = { token: string; categories: MenuCategory[] };
 
 export function CustomerMenu({ token, categories }: Props) {
   const router = useRouter();
   const [cart, setCart] = useCart(token);
+  const operation = useOrderOperation(token);
   const [selected, setSelected] = useState<MenuProduct | null>(null);
   const [dishOpen, setDishOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -55,14 +57,16 @@ export function CustomerMenu({ token, categories }: Props) {
     const items = toSubmitItems(lines);
     if (items.length === 0 || send.kind === "sending") return;
     setSend({ kind: "sending" });
+    const operationId = operation.getOrCreate(JSON.stringify(items));
     let res: Awaited<ReturnType<typeof submitOrder>>;
     try {
-      res = await submitOrder(token, items);
+      res = await submitOrder(token, items, operationId);
     } catch {
       setSend({ kind: "error", code: "NETWORK" });
       return;
     }
     if (res.ok) {
+      operation.clear();
       setCart(() => []);
       setRejected(new Set());
       setSend({ kind: "sent", round: res.data.round });
@@ -75,6 +79,13 @@ export function CustomerMenu({ token, categories }: Props) {
         kind: "error",
         code: "UNAVAILABLE_PRODUCTS",
       });
+      return;
+    }
+    if (res.code === "INSUFFICIENT_STOCK") {
+      const empty = res.details?.shortages?.filter((s) => s.available === 0).map((s) => s.productId) ?? [];
+      if (empty.length) setRejected(new Set(empty));
+      router.refresh();
+      setSend({ kind: "error", code: res.code, details: res.details });
       return;
     }
     setSend({ kind: "error", code: res.code, details: res.details });
@@ -99,6 +110,7 @@ export function CustomerMenu({ token, categories }: Props) {
         open={dishOpen}
         onClose={() => setDishOpen(false)}
         onAdd={({ product, quantity, note }) => {
+          operation.clear();
           setCart((c) => addLine(c, { productId: product.id, name: product.name, unitPrice: product.price, quantity, note }));
           setSelected(null);
           setDishOpen(false);
@@ -113,14 +125,20 @@ export function CustomerMenu({ token, categories }: Props) {
         send={send}
         onSend={handleSend}
         onQuantity={(key, qty) => {
+          operation.clear();
           resetSendError();
           setCart((c) => updateQuantity(c, key, qty));
         }}
         onRemove={(key) => {
+          operation.clear();
           resetSendError();
           setCart((c) => removeLine(c, key));
         }}
-        onNote={(key, note) => setCart((c) => updateNote(c, key, note))}
+        onNote={(key, note) => {
+          operation.clear();
+          resetSendError();
+          setCart((c) => updateNote(c, key, note));
+        }}
       />
     </>
   );

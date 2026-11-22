@@ -7,19 +7,22 @@
 // - Aquí NO se publican eventos de tiempo real: cada función devuelve lo necesario para
 //   que el llamador publique tras el commit (`{ orderId, tableId, waiterId, version, … }`).
 
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
-import type { Bill, ItemStatus } from "@/generated/prisma/client";
+import type { Bill, ItemStatus, SubmissionSource } from "@/generated/prisma/client";
 import { computeBill, parseBillingSettings } from "@/lib/domain/billing";
 import {
   ConflictError,
+  InsufficientStockError,
   InvalidTableError,
   InvalidTransitionError,
   NotFoundError,
   OrderClosedError,
   UnavailableProductsError,
 } from "@/lib/domain/errors";
+import { aggregatePortionDemand } from "@/lib/domain/inventory";
 import { canTransitionItem, groupBillLines } from "@/lib/domain/order-rules";
 import type { MixedPayment, PaymentMethod } from "@/lib/payment-methods";
 
@@ -43,11 +46,13 @@ export const orderItemsInput = z
 export const addItemsInput = z.object({
   token: z.string().min(16).max(64),
   items: orderItemsInput,
+  operationId: z.uuid().optional(),
 });
 
 export const addItemsByTableInput = z.object({
   tableId: z.uuid(),
   items: orderItemsInput,
+  operationId: z.uuid().optional(),
 });
 
 export type OrderItemInput = z.input<typeof orderItemsInput>[number];
@@ -66,7 +71,7 @@ export type OrderMutationResult = {
 
 export type AddItemsResult = OrderMutationResult & { round: number; isNew: boolean };
 export type ConfirmRoundResult = OrderMutationResult & { round: number; count: number };
-export type ItemMutationResult = OrderMutationResult & { itemId: string; status: ItemStatus };
+export type ItemMutationResult = OrderMutationResult & { itemId: string; status: ItemStatus; changed: boolean };
 export type CloseOrderResult = OrderMutationResult & {
   bill: Bill;
   /** Ítems que quedaron PENDING / IN_PREPARATION al cerrar (el diálogo los advierte). */
@@ -77,27 +82,42 @@ export type CloseOrderResult = OrderMutationResult & {
 // Añadir ítems (cliente vía QR o mesero en nombre del cliente)
 // ---------------------------------------------------------------------------
 
-/** Cliente: `{ token, items }` (token público del QR). */
+/** Cliente: `{ token, items, operationId? }` (token público del QR). */
 export async function addItemsToOrder(raw: unknown): Promise<AddItemsResult> {
-  const { token, items } = addItemsInput.parse(raw);
-  return addItemsCore({ publicToken: token }, items);
+  const { token, items, operationId = randomUUID() } = addItemsInput.parse(raw);
+  return addItemsCore({ publicToken: token }, items, operationId, "CUSTOMER");
 }
 
-/** Mesero en nombre del cliente: `{ tableId, items }`. La autorización la hace la Server Action. */
+/** Mesero en nombre del cliente. La autorización la hace la Server Action. */
 export async function addItemsToOrderByTableId(raw: unknown): Promise<AddItemsResult> {
-  const { tableId, items } = addItemsByTableInput.parse(raw);
-  return addItemsCore({ id: tableId }, items);
+  const { tableId, items, operationId = randomUUID() } = addItemsByTableInput.parse(raw);
+  return addItemsCore({ id: tableId }, items, operationId, "STAFF");
 }
 
 type ParsedItems = z.output<typeof orderItemsInput>;
+type LockedProduct = {
+  id: string;
+  name: string;
+  nameEn: string | null;
+  price: number;
+  available: boolean;
+  availableQuantity: number | null;
+};
+
+function submissionHash(items: ParsedItems, source: SubmissionSource): string {
+  return createHash("sha256").update(JSON.stringify({ source, items })).digest("hex");
+}
 
 async function addItemsCore(
   tableWhere: { publicToken: string } | { id: string },
   items: ParsedItems,
+  operationId: string,
+  source: SubmissionSource,
 ): Promise<AddItemsResult> {
+  const requestHash = submissionHash(items, source);
   return withOpenOrderRetry(() =>
     db.$transaction(async (tx) => {
-      // Siempre mesa → orden: serializa con desactivación y evita bloqueos cruzados al cerrar.
+      // Siempre mesa → orden → productos. Ese orden evita bloqueos cruzados con cierre y administración.
       if ("id" in tableWhere) {
         await tx.$queryRaw`SELECT id FROM "Table" WHERE id = ${tableWhere.id} FOR UPDATE`;
       } else {
@@ -106,15 +126,35 @@ async function addItemsCore(
       const table = await tx.table.findUnique({ where: tableWhere, include: { zone: true } });
       if (!table || table.status === "INACTIVE") throw new InvalidTableError();
 
-      // Precios SIEMPRE desde la BD
-      const ids = [...new Set(items.map((i) => i.productId))];
-      const products = await tx.product.findMany({ where: { id: { in: ids }, available: true } });
-      const byId = new Map(products.map((p) => [p.id, p]));
-      const missing = ids.filter((id) => !byId.has(id));
-      if (missing.length) throw new UnavailableProductsError(missing);
+      // Una respuesta perdida se puede pedir otra vez sin crear otra ronda ni reservar dos veces.
+      const replay = await tx.orderSubmission.findUnique({
+        where: { id: operationId },
+        select: {
+          tableId: true,
+          orderId: true,
+          round: true,
+          version: true,
+          isNew: true,
+          requestHash: true,
+          order: { select: { waiterId: true } },
+        },
+      });
+      if (replay) {
+        if (replay.tableId !== table.id || replay.requestHash !== requestHash) {
+          throw new ConflictError("Este identificador de envío ya se usó con otro pedido.");
+        }
+        return {
+          orderId: replay.orderId,
+          tableId: table.id,
+          tableNumber: table.number,
+          waiterId: replay.order.waiterId,
+          version: replay.version,
+          round: replay.round,
+          isNew: replay.isNew,
+        };
+      }
 
-      // Orden abierta existente o nueva. Si otra transacción la crea a la vez, el índice
-      // único parcial `one_open_order_per_table` hace fallar este INSERT (P2002) y se reintenta.
+      // Orden abierta existente o nueva. El índice parcial sigue siendo la última defensa.
       let order = await tx.order.findFirst({
         where: { tableId: table.id, status: "OPEN" },
         select: { id: true },
@@ -126,10 +166,28 @@ async function addItemsCore(
           select: { id: true },
         });
       }
-
-      // Bloquea la fila: serializa contra closeOrder() y otros envíos
       const locked = await lockOrder(tx, order.id);
       if (locked.status !== "OPEN") throw new OrderClosedError();
+
+      // Suma líneas del mismo producto y bloquea en orden estable: dos mesas no venden la última porción.
+      const demand = aggregatePortionDemand(items);
+      const ids = [...demand.keys()].sort();
+      const products = await tx.$queryRaw<LockedProduct[]>(Prisma.sql`
+        SELECT id, name, "nameEn", price, available, "availableQuantity"
+        FROM "Product"
+        WHERE id IN (${Prisma.join(ids)})
+        ORDER BY id
+        FOR UPDATE
+      `);
+      const byId = new Map(products.map((p) => [p.id, p]));
+      const unavailable = ids.filter((id) => !byId.get(id)?.available);
+      if (unavailable.length) throw new UnavailableProductsError(unavailable);
+      const shortages = ids.flatMap((id) => {
+        const available = byId.get(id)!.availableQuantity;
+        const requested = demand.get(id)!;
+        return available !== null && requested > available ? [{ productId: id, requested, available }] : [];
+      });
+      if (shortages.length) throw new InsufficientStockError(shortages);
 
       const round = locked.lastRound + 1;
       await tx.orderItem.createMany({
@@ -147,12 +205,40 @@ async function addItemsCore(
           };
         }),
       });
-
       const updated = await tx.order.update({
         where: { id: locked.id },
         data: { lastRound: round, version: { increment: 1 } },
         select: { version: true, waiterId: true },
       });
+      await tx.orderSubmission.create({
+        data: {
+          id: operationId,
+          tableId: table.id,
+          orderId: locked.id,
+          round,
+          version: updated.version,
+          isNew,
+          requestHash,
+          source,
+        },
+      });
+      for (const id of ids) {
+        const p = byId.get(id)!;
+        if (p.availableQuantity === null) continue;
+        const quantity = demand.get(id)!;
+        const after = p.availableQuantity - quantity;
+        await tx.product.update({ where: { id }, data: { availableQuantity: after } });
+        await tx.inventoryMovement.create({
+          data: {
+            productId: id,
+            submissionId: operationId,
+            type: "RESERVATION",
+            delta: -quantity,
+            balanceBefore: p.availableQuantity,
+            balanceAfter: after,
+          },
+        });
+      }
       // Una llamada pendiente (NEEDS_ATTENTION) no se pierde porque llegue otra ronda.
       await tx.table.updateMany({
         where: { id: table.id, status: { not: "NEEDS_ATTENTION" } },
@@ -184,8 +270,8 @@ export async function confirmRound(orderId: string, round: number): Promise<Conf
       where: { orderId, round, status: "PENDING" },
       data: { status: "IN_PREPARATION" },
     });
-    const bumped = await bumpVersion(tx, locked.id);
-    return { ...bumped, round, count };
+    const mutation = count > 0 ? await bumpVersion(tx, locked.id) : await currentMutationResult(tx, locked.id);
+    return { ...mutation, round, count };
   });
 }
 
@@ -197,8 +283,8 @@ export async function serveRound(orderId: string, round: number): Promise<Confir
       where: { orderId, round, status: "IN_PREPARATION" },
       data: { status: "SERVED", servedAt: new Date() },
     });
-    const bumped = await bumpVersion(tx, locked.id);
-    return { ...bumped, round, count };
+    const mutation = count > 0 ? await bumpVersion(tx, locked.id) : await currentMutationResult(tx, locked.id);
+    return { ...mutation, round, count };
   });
 }
 
@@ -216,6 +302,10 @@ export async function setItemStatus(itemId: string, status: ItemStatus): Promise
     // Releer con la orden bloqueada: el estado pudo cambiar entre tanto
     const item = await tx.orderItem.findUnique({ where: { id: itemId }, select: { status: true } });
     if (!item) throw new NotFoundError("Ítem");
+    if (item.status === status && status !== "PENDING") {
+      const current = await currentMutationResult(tx, locked.id);
+      return { ...current, itemId, status, changed: false };
+    }
     if (!canTransitionItem(item.status, status)) throw new InvalidTransitionError(item.status, status);
 
     await tx.orderItem.update({
@@ -223,7 +313,7 @@ export async function setItemStatus(itemId: string, status: ItemStatus): Promise
       data: { status, ...(status === "SERVED" ? { servedAt: new Date() } : {}) },
     });
     const bumped = await bumpVersion(tx, locked.id);
-    return { ...bumped, itemId, status };
+    return { ...bumped, itemId, status, changed: true };
   });
 }
 
@@ -337,6 +427,14 @@ async function lockOpenOrder(tx: Tx, orderId: string): Promise<LockedOrder> {
   const row = await lockOrder(tx, orderId);
   if (row.status !== "OPEN") throw new OrderClosedError();
   return row;
+}
+
+async function currentMutationResult(tx: Tx, orderId: string): Promise<OrderMutationResult> {
+  const o = await tx.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { id: true, tableId: true, waiterId: true, version: true, table: { select: { number: true } } },
+  });
+  return { orderId: o.id, tableId: o.tableId, tableNumber: o.table.number, waiterId: o.waiterId, version: o.version };
 }
 
 async function bumpVersion(tx: Tx, orderId: string): Promise<OrderMutationResult> {

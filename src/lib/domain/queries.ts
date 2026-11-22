@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import type { ItemStatus, OrderStatus, TableStatus } from "@/generated/prisma/client";
 import { computeBill, parseBillingSettings, type BillTotals } from "@/lib/domain/billing";
 import { InvalidTableError } from "@/lib/domain/errors";
+import { isProductSellable } from "@/lib/domain/inventory";
 import { deriveCustomerStatus, type CustomerStatus } from "@/lib/domain/order-status";
 import type { PaymentMethod } from "@/lib/payment-methods";
 
@@ -23,7 +24,8 @@ export type MenuProduct = {
   description: string | null;
   price: number; // centavos
   imageUrl: string | null;
-  available: boolean; // false = "Agotado" (se muestra, no se puede pedir)
+  available: boolean; // disponibilidad efectiva: control manual + porciones
+  availableQuantity: number | null;
 };
 export type MenuCategory = { id: string; name: string; nameEn?: string | null; products: MenuProduct[] };
 
@@ -37,11 +39,29 @@ export async function getMenuData(): Promise<MenuCategory[]> {
       nameEn: true,
       products: {
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, nameEn: true, description: true, descriptionEn: true, price: true, imageUrl: true, available: true },
+        select: {
+          id: true,
+          name: true,
+          nameEn: true,
+          description: true,
+          descriptionEn: true,
+          price: true,
+          imageUrl: true,
+          available: true,
+          availableQuantity: true,
+        },
       },
     },
   });
-  return categories.filter((c) => c.products.length > 0);
+  return categories
+    .filter((c) => c.products.length > 0)
+    .map((c) => ({
+      ...c,
+      products: c.products.map((p) => ({
+        ...p,
+        available: isProductSellable(p.available, p.availableQuantity),
+      })),
+    }));
 }
 
 // ---------------------------------------------------------------------------

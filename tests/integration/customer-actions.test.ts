@@ -114,6 +114,7 @@ describe("getMenu / getTableByToken", () => {
       price: f.burger.price,
       imageUrl: null,
       available: true,
+      availableQuantity: null,
     });
     expect(mine[1].products).toEqual([expect.objectContaining({ id: f.soldOut.id, available: false })]);
   });
