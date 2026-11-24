@@ -238,6 +238,54 @@ describe("addItemsToOrder", () => {
 });
 
 describe("acciones del mesero", () => {
+  it.each([true, false])("cancelar y cerrar respetan el orden de bloqueo (cancelar primero: %s)", async (cancelFirst) => {
+    const table = await newTable();
+    const { orderId } = await addItemsToOrder({ token: table.publicToken, items: [
+      { productId: f.burger.id, quantity: 1 }, { productId: f.soda.id, quantity: 1 },
+    ] });
+    const item = await db.orderItem.findFirstOrThrow({ where: { orderId, productId: f.soda.id } });
+    const cancel = () => cancelItem(item.id);
+    const payment = { paymentMethod: "CARD" as const, closeOperationId: randomUUID() };
+    const close = () => closeOrder(orderId, f.staffId, payment);
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    // Una tercera transacción retiene la mesa hasta observar ambos contendientes en la cola real de PostgreSQL.
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Table" WHERE id = ${table.id} FOR UPDATE`;
+      const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      first = (cancelFirst ? cancel() : close()).catch((e: unknown) => e);
+      let firstPid = 0;
+      await vi.waitFor(async () => {
+        const rows = await tx.$queryRaw<{ pid: number }[]>`
+          SELECT pid FROM pg_stat_activity WHERE ${pid} = ANY(pg_blocking_pids(pid))`;
+        expect(rows).toHaveLength(1);
+        firstPid = rows[0].pid;
+      }, { timeout: 3000 });
+      second = (cancelFirst ? close() : cancel()).catch((e: unknown) => e);
+      await vi.waitFor(async () => {
+        const rows = await tx.$queryRaw<{ pid: number }[]>`
+          SELECT pid FROM pg_stat_activity WHERE pid <> ${firstPid}
+          AND (${pid} = ANY(pg_blocking_pids(pid)) OR ${firstPid} = ANY(pg_blocking_pids(pid)))`;
+        expect(rows).toHaveLength(1);
+      }, { timeout: 3000 });
+    }, { timeout: 15_000 });
+    const results = await Promise.all([first, second]);
+    const cancellation = results[cancelFirst ? 0 : 1];
+    if (cancelFirst) expect(cancellation).toMatchObject({ changed: true, status: "CANCELLED" });
+    else expect(cancellation).toBeInstanceOf(OrderClosedError);
+    expect(results[cancelFirst ? 1 : 0]).toMatchObject({ orderId, bill: { orderId } });
+    const bill = await db.bill.findUniqueOrThrow({ where: { orderId } });
+    const subtotal = f.burger.price + (cancelFirst ? 0 : f.soda.price);
+    expect(bill).toMatchObject({ subtotal, taxAmount: subtotal - Math.round(subtotal / 1.19),
+      tipAmount: Math.round(subtotal * 0.1), total: subtotal + Math.round(subtotal * 0.1) });
+    expect(bill.lines).toEqual(expect.arrayContaining([expect.objectContaining({ productId: f.burger.id })]));
+    expect((bill.lines as { productId: string }[]).some((line) => line.productId === f.soda.id)).toBe(!cancelFirst);
+    expect((await db.orderItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(cancelFirst ? "CANCELLED" : "PENDING");
+    expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("CLOSED");
+    await expect(cancelItem(item.id)).rejects.toBeInstanceOf(OrderClosedError);
+    expect(await db.bill.findUniqueOrThrow({ where: { orderId } })).toEqual(bill);
+  });
+
   it("confirmRound pasa los PENDING de esa ronda a IN_PREPARATION y sube version", async () => {
     const table = await newTable();
     const r1 = await addItemsToOrder({ token: table.publicToken, items: [{ productId: f.burger.id, quantity: 1 }] });
