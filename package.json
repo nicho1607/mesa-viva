@@ -14,6 +14,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:menu": "tsx prisma/update-menu.ts",
     "db:reset": "prisma migrate reset"
   },
   "dependencies": {

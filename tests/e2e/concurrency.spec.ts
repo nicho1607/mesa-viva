@@ -16,8 +16,8 @@ test("dos envíos simultáneos a una mesa libre abren una sola orden", async ({ 
   const b = await newCustomerPage(browser);
   try {
     await Promise.all([a.goto(`/m/${table.publicToken}`), b.goto(`/m/${table.publicToken}`)]);
-    await addDish(a, "Empanadas vallunas");
-    await addDish(b, "Jugo de lulo", "Sin hielo");
+    await addDish(a, "Empanaditas con ají · 4 personas");
+    await addDish(b, "Jugo natural en agua", "Sin hielo");
     for (const p of [a, b]) {
       await p.getByRole("button", { name: /^Ver pedido \(1\)/ }).click();
       await expect(p.getByRole("button", { name: "Enviar pedido" })).toBeEnabled();
@@ -47,7 +47,7 @@ test("dos envíos simultáneos a una mesa libre abren una sola orden", async ({ 
       [orders[0].id],
     );
     expect(items.map((i) => i.round)).toEqual([1, 2]);
-    expect(items.map((i) => i.name).sort()).toEqual(["Empanadas vallunas", "Jugo de lulo"]);
+    expect(items.map((i) => i.name).sort()).toEqual(["Empanaditas con ají · 4 personas", "Jugo natural en agua"]);
   } finally {
     await a.context().close();
     await b.context().close();

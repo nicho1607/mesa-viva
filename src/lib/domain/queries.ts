@@ -32,6 +32,7 @@ export type MenuCategory = { id: string; name: string; nameEn?: string | null; p
 /** Categorías (con productos) ordenadas por sortOrder, nombre; productos igual. */
 export async function getMenuData(): Promise<MenuCategory[]> {
   const categories = await db.category.findMany({
+    where: { name: { not: "Carta anterior (retirada)" } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,

@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role } from "../src/generated/prisma/client";
 import { seedConfig } from "./seed-config";
+import { syncRestaurantMenu } from "./sync-restaurant-menu";
 
 const { production, adminPassword, waiterPassword } = seedConfig();
 
@@ -13,55 +14,8 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-/** Pesos colombianos -> centavos enteros. `cop(28000)` = 2.800.000. */
-const cop = (pesos: number) => pesos * 100;
-
-/** Token opaco para el QR de la mesa: 18 bytes -> 24 caracteres base64url. */
+/** Token opaco para los QR de mesa. */
 const newPublicToken = () => randomBytes(18).toString("base64url");
-
-type SeedProduct = { name: string; description: string; price: number };
-
-const MENU: { name: string; products: SeedProduct[] }[] = [
-  {
-    name: "Entradas",
-    products: [
-      { name: "Empanadas vallunas", description: "Tres empanadas de maíz rellenas de papa y carne, con ají de la casa.", price: cop(12000) },
-      { name: "Patacones con hogao", description: "Patacones crocantes con hogao casero y queso costeño rallado.", price: cop(14000) },
-      { name: "Arepitas con chicharrón", description: "Mini arepas de maíz peto con chicharrón crocante y guacamole.", price: cop(16000) },
-      { name: "Ceviche de camarón", description: "Camarón en limón, cebolla morada, cilantro y salsa rosada, con chips de plátano.", price: cop(24000) },
-      { name: "Sopa de tortilla", description: "Caldo de tomate especiado con tiras de tortilla, aguacate y crema.", price: cop(15000) },
-    ],
-  },
-  {
-    name: "Platos fuertes",
-    products: [
-      { name: "Bandeja paisa", description: "Frijoles, arroz, carne molida, chicharrón, chorizo, huevo frito, maduro, arepa y aguacate.", price: cop(38000) },
-      { name: "Ajiaco santafereño", description: "Sopa de tres papas con pollo desmechado y guascas; con alcaparras, crema y arroz.", price: cop(32000) },
-      { name: "Sobrebarriga en salsa criolla", description: "Sobrebarriga horneada en salsa criolla, con papa salada y arroz blanco.", price: cop(36000) },
-      { name: "Mojarra frita", description: "Mojarra entera frita, con arroz de coco, patacones y ensalada.", price: cop(42000) },
-      { name: "Pechuga a la plancha", description: "Pechuga marinada en hierbas con papas a la francesa y ensalada fresca.", price: cop(29000) },
-    ],
-  },
-  {
-    name: "Bebidas",
-    products: [
-      { name: "Limonada de coco", description: "Limonada frappé con crema de coco.", price: cop(11000) },
-      { name: "Jugo de lulo", description: "Jugo natural de lulo en agua o en leche.", price: cop(8000) },
-      { name: "Aguapanela con limón", description: "Aguapanela fría con limón, preparada en casa.", price: cop(6000) },
-      { name: "Cerveza nacional", description: "Botella de 330 ml.", price: cop(9000) },
-      { name: "Café tinto", description: "Café colombiano de origen, recién colado.", price: cop(4000) },
-    ],
-  },
-  {
-    name: "Postres",
-    products: [
-      { name: "Tres leches", description: "Bizcocho húmedo bañado en tres leches con canela.", price: cop(13000) },
-      { name: "Postre de natas", description: "Receta tradicional boyacense de natas con uvas pasas.", price: cop(12000) },
-      { name: "Brevas con arequipe", description: "Brevas caladas con arequipe y queso campesino.", price: cop(14000) },
-      { name: "Obleas", description: "Obleas con arequipe, queso rallado y mermelada de mora.", price: cop(9000) },
-    ],
-  },
-];
 
 const DEMO_PASSWORD_WAITER = waiterPassword;
 const DEMO_PASSWORD_ADMIN = adminPassword;
@@ -89,6 +43,8 @@ const SETTINGS: Record<string, string> = {
 async function main() {
   // En producción se inicializa una vez: los reinicios no deben restaurar menú ni contraseñas.
   if (production && await prisma.setting.findUnique({ where: { key: "_seedInitialized" } })) {
+    const updated = await syncRestaurantMenu(prisma, true);
+    if (updated) console.log(`Carta real publicada: ${updated} productos.`);
     console.log("La base de producción ya está inicializada; se conservan sus datos.");
     return;
   }
@@ -121,23 +77,8 @@ async function main() {
     }
   }
 
-  // Menú
-  for (const [ci, c] of MENU.entries()) {
-    const category = await prisma.category.upsert({
-      where: { name: c.name },
-      update: { sortOrder: ci },
-      create: { name: c.name, sortOrder: ci },
-    });
-    for (const [pi, p] of c.products.entries()) {
-      const data = { ...p, sortOrder: pi, categoryId: category.id };
-      const existing = await prisma.product.findFirst({
-        where: { name: p.name, categoryId: category.id },
-        select: { id: true },
-      });
-      if (existing) await prisma.product.update({ where: { id: existing.id }, data });
-      else await prisma.product.create({ data });
-    }
-  }
+  // Menú real, compartido con la actualización independiente de la carta.
+  await syncRestaurantMenu(prisma);
 
   // Configuración
   for (const [key, value] of Object.entries(SETTINGS)) {

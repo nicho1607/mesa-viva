@@ -21,7 +21,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
   const table = await getTable(1);
   const [bandeja, ajiaco, limonada] = await Promise.all([
     getProductPrice("Bandeja paisa"),
-    getProductPrice("Ajiaco santafereño"),
+    getProductPrice("Ajiaco"),
     getProductPrice("Limonada de coco"),
   ]);
   expect(await getSetting("pricesIncludeTax")).toBe("true"); // IVA incluido: total = subtotal + propina
@@ -46,7 +46,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await customer.goto(`/m/${table.publicToken}`);
       await expect(customer.getByText("Mesa 1", { exact: true })).toBeVisible();
       await addDish(customer, "Bandeja paisa", "Sin cebolla");
-      await addDish(customer, "Ajiaco santafereño");
+      await addDish(customer, "Ajiaco");
       await expect(customer.getByRole("button", { name: /^Ver pedido \(2\)/ })).toBeVisible();
       await sendOrder(customer, 1);
     });
