@@ -52,7 +52,7 @@ describe("contenido bilingüe e históricos", () => {
     const totals = bill.totals;
     const changed = await admin.updateProduct(actor, productRaw({ id: productId, name: `Caldo ${tag}`, description: "Caldo con arroz", nameEn: "Soup fixture", descriptionEn: "Potato soup fixture" }));
     expect(changed.nameEn).toBeNull(); expect(changed.descriptionEn).toBeNull();
-    await closeOrder(order.orderId, actor.id);
+    await closeOrder(order.orderId, actor.id, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     bill = await getTableBillData(token);
     if (!bill.order) throw new Error("sin orden");
     expect(bill.customerStatus).toBe("CLOSED");
@@ -87,7 +87,7 @@ describe("contenido bilingüe e históricos", () => {
     vi.stubEnv("CUSTOMER_ENGLISH_PREVIEW", "true");
     try {
       for (const closed of [false, true]) {
-        if (closed) await closeOrder(order.orderId, actor.id);
+        if (closed) await closeOrder(order.orderId, actor.id, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
         const before = await getTableBillData(token);
         const preview = await getTableBill(token);
         if (!preview.ok || !preview.data.order || !before.order) throw new Error("No se obtuvo la cuenta");

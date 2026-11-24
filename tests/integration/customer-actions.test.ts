@@ -266,8 +266,9 @@ describe("getTableBill", () => {
     const t = await newTable();
     const r = await submitOrder(t.publicToken, [{ productId: f.burger.id, quantity: 1 }]);
     if (!r.ok) throw new Error("submit falló");
-    const closed = await closeOrder(r.data.orderId, f.staffId, { tipRate: 0, paymentMethod: paymentMethod ?? undefined });
+    const closed = await closeOrder(r.data.orderId, f.staffId, { closeOperationId: crypto.randomUUID(), tipRate: 0, paymentMethod: paymentMethod ?? "CARD" });
 
+    if (paymentMethod === null) await db.bill.update({ where: { id: closed.bill.id }, data: { paymentMethod: null, closeOperationId: null, closeRequestHash: null } });
     const res = await getTableBill(t.publicToken);
     if (!res.ok || !("totals" in res.data)) throw new Error("se esperaba la cuenta cerrada");
     expect(res.data.order.status).toBe("CLOSED");

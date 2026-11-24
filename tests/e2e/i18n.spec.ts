@@ -135,7 +135,8 @@ test("inglés: borradores, estado local, envío único, cuenta SSE y cierre espa
     await expect(waiter.getByText("Método solicitado: Efectivo")).toBeVisible();
     await waiter.getByRole("button", { name: "Finalizar servicio", exact: true }).click();
     const close = waiter.getByRole("dialog", { name: "Finalizar servicio", exact: true });
-    await close.getByRole("button", { name: "Finalizar y generar cuenta" }).click();
+    await close.getByLabel("Efectivo recibido", { exact: true }).fill("30000");
+    await close.getByRole("button", { name: "Registrar pago y finalizar" }).click();
     await expect(page.getByText("Order closed", { exact: true })).toBeVisible();
     await expect(page.locator('dt:text-is("Payment method") ~ dd')).toHaveText("Cash");
     await expect(waiter.getByRole("article", { name: "Cuenta, mesa 987654" })).toContainText("Sopa idioma E2E");

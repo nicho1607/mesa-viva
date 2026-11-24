@@ -204,6 +204,11 @@ model InventoryMovement {
 }
 
 model Bill {
+  closeOperationId String? @unique
+  closeRequestHash String?
+  tipCashAmount Int?
+  tipTransferAmount Int?
+  cashReceivedAmount Int?
   transferAmount Int?
   cashAmount Int?
   paymentMethod PaymentMethod?

@@ -24,7 +24,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/staff/admi
     ? await Promise.all([getClosedSales(range), db.setting.findUnique({ where: { key: "currency" } })])
     : [[], null];
   const { currency } = parseBillingSettings(currencySetting ? [currencySetting] : []);
-  const { total, cash, transfer, unattributed, unattributedCount } = summarizeSales(sales);
+  const { total, cash, transfer, unattributed, unattributedCount, tipCash, tipTransfer, unknownTipCount } = summarizeSales(sales);
 
   return (
     <section className="space-y-5">
@@ -52,6 +52,9 @@ export default async function SalesPage({ searchParams }: PageProps<"/staff/admi
             <div><dt>Total cobrado</dt><dd className="text-xl font-bold">{formatMoney(total, currency)}</dd></div>
             <div><dt>Cobrado registrado en efectivo físico</dt><dd className="text-xl font-bold">{formatMoney(cash, currency)}</dd></div>
             <div><dt>Cobrado registrado por transferencia</dt><dd className="text-xl font-bold">{formatMoney(transfer, currency)}</dd></div>
+            <div><dt>Propina en efectivo (incluida en cobros)</dt><dd className="text-xl font-bold">{formatMoney(tipCash, currency)}</dd></div>
+            <div><dt>Propina por transferencia (incluida en cobros)</dt><dd className="text-xl font-bold">{formatMoney(tipTransfer, currency)}</dd></div>
+            {unknownTipCount > 0 && <div><dt>Cuentas sin registro de propina por medio</dt><dd className="text-xl font-bold">{unknownTipCount}</dd></div>}
             {unattributedCount > 0 && (
               <div><dt>Importe sin atribuir</dt><dd className="text-xl font-bold">{formatMoney(unattributed, currency)}</dd></div>
             )}

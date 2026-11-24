@@ -114,7 +114,7 @@ describe("serveRound", () => {
     await expect(staffServeRound(u.ana, { orderId: order.id, round: 1 })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(staffConfirmRound(u.ana, { orderId: order.id, round: 2 })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(staffConfirmRound(u.beto, { orderId: order.id, round: 2 })).resolves.toMatchObject({ count: 1 });
-    await staffCloseService(u.beto, { orderId: order.id, tipRate: 0, paymentMethod: "CASH" });
+    await staffCloseService(u.beto, { closeOperationId: crypto.randomUUID(), orderId: order.id, tipRate: 0, paymentMethod: "CASH", cashReceivedAmount: 100_000_000 });
     await expect(serveRound(order.id, 2)).rejects.toBeInstanceOf(OrderClosedError);
   });
 });
@@ -156,21 +156,22 @@ describe("getTableDetailForStaff + cierre con propina", () => {
 
   it("caja cierra con propina 15 %: Bill, mesa libre y la cuenta cerrada aparece en el detalle", async () => {
     const { order } = await getTableDetailForStaff(u.caja, f.t3);
-    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 1.5, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ZodError);
-    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(ZodError);
-    await expect(staffCloseService(u.caja, {
+    await expect(staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(), orderId: order!.id, tipRate: 1.5, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ZodError);
+    await expect(staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(), orderId: order!.id, tipRate: 0.1 })).rejects.toBeInstanceOf(ZodError);
+    await expect(staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(),
       orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
     })).rejects.toMatchObject({ code: "CONFLICT" });
-    await expect(staffCloseService(u.caja, {
+    await expect(staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(),
       orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
-      mixedPayment: { transferAmount: 100, cashAmount: 100 },
+      mixedPayment: { transferAmount: 100, cashAmount: 100, tipCashAmount: 0, tipTransferAmount: 900_000 },
     })).rejects.toMatchObject({ code: "CONFLICT" });
     expect((await getTableDetailForStaff(u.caja, f.t3)).order?.id).toBe(order!.id);
-    await expect(staffCloseService(u.beto, { orderId: order!.id, tipRate: 0.1, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(staffCloseService(u.beto, { closeOperationId: crypto.randomUUID(), orderId: order!.id, tipRate: 0.1, paymentMethod: "CARD" })).rejects.toBeInstanceOf(ForbiddenError);
 
-    const r = await staffCloseService(u.caja, {
+    const r = await staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(),
       orderId: order!.id, tipRate: 0.15, paymentMethod: "MIXED",
-      mixedPayment: { transferAmount: 4_000_000, cashAmount: 2_900_000 },
+      cashReceivedAmount: 3_000_000,
+      mixedPayment: { transferAmount: 4_000_000, cashAmount: 2_900_000, tipCashAmount: 900_000, tipTransferAmount: 0 },
     });
     expect(r.bill).toMatchObject({ paymentMethod: "MIXED", transferAmount: 4_000_000, cashAmount: 2_900_000 });
     expect(r.unservedCount).toBe(1); // el ajiaco sigue en cocina
@@ -189,6 +190,6 @@ describe("getTableDetailForStaff + cierre con propina", () => {
     // Más de 2 h después ya no se muestra
     const later = await getTableDetailForStaff(u.ana, f.t3, new Date(Date.now() + 3 * 60 * 60 * 1000));
     expect(later.closedBill).toBeNull();
-    await expect(staffCloseService(u.caja, { orderId: order!.id, tipRate: 0.1, paymentMethod: "CASH" })).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(staffCloseService(u.caja, { closeOperationId: crypto.randomUUID(), orderId: order!.id, tipRate: 0.1, paymentMethod: "CASH" })).rejects.toBeInstanceOf(OrderClosedError);
   });
 });

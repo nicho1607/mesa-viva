@@ -15,6 +15,7 @@ import type { Bill, ItemStatus, SubmissionSource } from "@/generated/prisma/clie
 import { computeBill, parseBillingSettings } from "@/lib/domain/billing";
 import {
   ConflictError,
+  ForbiddenError,
   InsufficientStockError,
   InvalidTableError,
   InvalidTransitionError,
@@ -24,7 +25,8 @@ import {
 } from "@/lib/domain/errors";
 import { aggregatePortionDemand } from "@/lib/domain/inventory";
 import { canTransitionItem, groupBillLines } from "@/lib/domain/order-rules";
-import type { MixedPayment, PaymentMethod } from "@/lib/payment-methods";
+import { closePaymentInput, reconcilePayment, type ClosePayment } from "@/lib/payment-methods";
+import { decideTableAction } from "@/lib/domain/permissions";
 
 type Tx = Prisma.TransactionClient;
 
@@ -73,6 +75,7 @@ export type AddItemsResult = OrderMutationResult & { round: number; isNew: boole
 export type ConfirmRoundResult = OrderMutationResult & { round: number; count: number };
 export type ItemMutationResult = OrderMutationResult & { itemId: string; status: ItemStatus; changed: boolean };
 export type CloseOrderResult = OrderMutationResult & {
+  changed: boolean;
   bill: Bill;
   /** Ítems que quedaron PENDING / IN_PREPARATION al cerrar (el diálogo los advierte). */
   unservedCount: number;
@@ -333,71 +336,92 @@ export function cancelItem(itemId: string): Promise<ItemMutationResult> {
 export async function closeOrder(
   orderId: string,
   staffUserId: string,
-  opts: { tipRate?: number; paymentMethod?: PaymentMethod; mixedPayment?: MixedPayment } = {},
+  raw: ClosePayment,
 ): Promise<CloseOrderResult> {
-  if (opts.tipRate !== undefined && !(Number.isFinite(opts.tipRate) && opts.tipRate >= 0 && opts.tipRate <= 1)) {
-    throw new RangeError("tipRate debe estar entre 0 y 1");
-  }
+  const opts = closePaymentInput.parse(raw);
+  // El hash identifica el pedido normalizado, independiente de cambios posteriores en Setting.
+  const requestHash = createHash("sha256").update(JSON.stringify(opts)).digest("hex");
+  try {
+    return await db.$transaction(async (tx) => {
+      const locked = await lockOrder(tx, orderId);
+      const [actor, table] = await Promise.all([
+        tx.user.findUnique({ where: { id: staffUserId } }),
+        tx.table.findUniqueOrThrow({ where: { id: locked.tableId }, include: { zone: true } }),
+      ]);
+      const existing = await tx.bill.findUnique({ where: { orderId } });
+      const allowed = actor?.active && decideTableAction(actor, {
+        orderWaiterId: locked.waiterId,
+        assignedWaiterId: table.waiterId ?? table.zone.waiterId,
+      }, "close").ok;
+      if (!allowed && !(actor?.active && existing?.closedById === actor.id
+        && actor.role === "WAITER" && existing.closeOperationId === opts.closeOperationId)) {
+        throw new ForbiddenError();
+      }
+      if (existing?.closeOperationId === opts.closeOperationId) {
+        if (existing.closeRequestHash !== requestHash) throw new ConflictError("Esta operación ya se usó con otros datos de pago.");
+        const unservedCount = await tx.orderItem.count({ where: { orderId, status: { in: ["PENDING", "IN_PREPARATION"] } } });
+        return { ...await currentMutationResult(tx, orderId), bill: existing, changed: false, unservedCount };
+      }
+      if (locked.status !== "OPEN") throw new OrderClosedError();
+      if (await tx.bill.findUnique({ where: { closeOperationId: opts.closeOperationId } })) {
+        throw new ConflictError("Esta operación ya se usó para otra cuenta.");
+      }
 
-  return db.$transaction(async (tx) => {
-    await lockOpenOrder(tx, orderId);
-
-    const [items, settingRows] = await Promise.all([
-      tx.orderItem.findMany({ where: { orderId }, orderBy: [{ round: "asc" }, { createdAt: "asc" }] }),
-      tx.setting.findMany(),
-    ]);
-    const settings = parseBillingSettings(settingRows);
-    const tipRate = opts.tipRate ?? settings.tipRate;
-    const totals = computeBill(items, {
-      taxRate: settings.taxRate,
-      tipRate,
-      pricesIncludeTax: settings.pricesIncludeTax,
-    });
-
-    const split = opts.paymentMethod === "MIXED" ? opts.mixedPayment : undefined;
-    if (opts.paymentMethod === "MIXED" && (!split
-      || !Number.isInteger(split.transferAmount) || split.transferAmount < 0
-      || !Number.isInteger(split.cashAmount) || split.cashAmount < 0
-      || split.transferAmount > 2_147_483_647 || split.cashAmount > 2_147_483_647
-      || split.transferAmount + split.cashAmount !== totals.total)) {
-      throw new ConflictError("La transferencia y el efectivo deben sumar el total de la cuenta.");
-    }
-
-    const bill = await tx.bill.create({
-      data: {
-        orderId,
-        ...totals,
+      const [items, settingRows] = await Promise.all([
+        tx.orderItem.findMany({ where: { orderId }, orderBy: [{ round: "asc" }, { createdAt: "asc" }] }),
+        tx.setting.findMany(),
+      ]);
+      const settings = parseBillingSettings(settingRows);
+      const tipRate = opts.tipRate ?? settings.tipRate;
+      const totals = computeBill(items, {
         taxRate: settings.taxRate,
         tipRate,
-        paymentMethod: opts.paymentMethod,
-        transferAmount: split?.transferAmount,
-        cashAmount: split?.cashAmount,
-        lines: groupBillLines(items),
-        closedById: staffUserId,
-      },
-    });
+        pricesIncludeTax: settings.pricesIncludeTax,
+      });
 
-    const order = await tx.order.update({
-      where: { id: orderId },
-      data: { status: "CLOSED", closedAt: new Date(), version: { increment: 1 } },
-      select: { id: true, tableId: true, waiterId: true, version: true },
-    });
-    const table = await tx.table.update({
-      where: { id: order.tableId },
-      data: { status: "AVAILABLE", attentionReason: null, pendingPaymentMethod: null },
-      select: { number: true },
-    });
+      const payment = reconcilePayment(opts, totals.total, totals.tipAmount);
 
-    return {
-      orderId: order.id,
-      tableId: order.tableId,
-      tableNumber: table.number,
-      waiterId: order.waiterId,
-      version: order.version,
-      bill,
-      unservedCount: items.filter((i) => i.status === "PENDING" || i.status === "IN_PREPARATION").length,
-    };
-  });
+      const bill = await tx.bill.create({
+        data: {
+          orderId,
+          ...totals,
+          taxRate: settings.taxRate,
+          tipRate,
+          paymentMethod: opts.paymentMethod,
+          ...payment,
+          closeOperationId: opts.closeOperationId,
+          closeRequestHash: requestHash,
+          lines: groupBillLines(items),
+          closedById: staffUserId,
+        },
+      });
+
+      const order = await tx.order.update({
+        where: { id: orderId },
+        data: { status: "CLOSED", closedAt: new Date(), version: { increment: 1 } },
+        select: { id: true, tableId: true, waiterId: true, version: true },
+      });
+      const updatedTable = await tx.table.update({
+        where: { id: order.tableId },
+        data: { status: "AVAILABLE", attentionReason: null, pendingPaymentMethod: null },
+        select: { number: true },
+      });
+
+      return {
+        orderId: order.id,
+        tableId: order.tableId,
+        tableNumber: updatedTable.number,
+        waiterId: order.waiterId,
+        version: order.version,
+        bill,
+        changed: true,
+        unservedCount: items.filter((i) => i.status === "PENDING" || i.status === "IN_PREPARATION").length,
+      };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) throw new ConflictError("Esta operación ya se usó para otra cuenta.");
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------

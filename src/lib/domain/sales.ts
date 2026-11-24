@@ -26,18 +26,27 @@ export function getClosedSales(closedAt: NonNullable<ReturnType<typeof salesDate
       paymentMethod: true,
       cashAmount: true,
       transferAmount: true,
+      tipCashAmount: true,
+      tipTransferAmount: true,
       order: { select: { closedAt: true, table: { select: { number: true } } } },
     },
   });
 }
 
-type SalePayment = Pick<Bill, "total" | "paymentMethod" | "cashAmount" | "transferAmount">;
+type SalePayment = Pick<Bill, "total" | "paymentMethod" | "cashAmount" | "transferAmount" | "tipCashAmount" | "tipTransferAmount">;
 
 export function summarizeSales(sales: readonly SalePayment[]) {
-  const summary = { total: 0, cash: 0, transfer: 0, unattributed: 0, unattributedCount: 0 };
+  const summary = { total: 0, cash: 0, transfer: 0, unattributed: 0, unattributedCount: 0,
+    tipCash: 0, tipTransfer: 0, unknownTipCount: 0 };
 
-  for (const { total, paymentMethod, cashAmount, transferAmount } of sales) {
+  for (const { total, paymentMethod, cashAmount, transferAmount, tipCashAmount, tipTransferAmount } of sales) {
     summary.total += total;
+    if (paymentMethod !== "CARD") {
+      if (tipCashAmount !== null && tipTransferAmount !== null) {
+        summary.tipCash += tipCashAmount;
+        summary.tipTransfer += tipTransferAmount;
+      } else summary.unknownTipCount++;
+    }
     switch (paymentMethod) {
       case "CASH":
         summary.cash += total;

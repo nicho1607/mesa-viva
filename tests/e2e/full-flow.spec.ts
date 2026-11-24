@@ -191,18 +191,19 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(paymentMethod).toHaveValue("MIXED");
       const customerMethod = customer.locator('dt:text-is("Método de pago") ~ dd');
       await expect(customerMethod).toHaveCount(0);
-      const finish = dialog.getByRole("button", { name: "Finalizar y generar cuenta" });
+      const finish = dialog.getByRole("button", { name: "Registrar pago y finalizar" });
       await expect(finish).toBeDisabled();
       await dialog.getByLabel("Transferencia", { exact: true }).fill("10000");
-      await dialog.getByLabel("Efectivo", { exact: true }).fill("1");
+      await dialog.getByLabel("Propina en efectivo", { exact: true }).fill("1");
       await expect(finish).toBeDisabled();
       const cashAmount = expectedTotal - 1_000_000;
-      await dialog.getByLabel("Efectivo", { exact: true }).fill(String(cashAmount / 100));
+      await dialog.getByLabel("Propina en efectivo", { exact: true }).fill(String(tip / 100));
+      await dialog.getByLabel("Efectivo recibido", { exact: true }).fill(String(cashAmount / 100));
       await dialog.getByRole("button", { name: "10 %" }).click();
       await expect(dialog.getByRole("button", { name: "10 %" })).toHaveAttribute("aria-pressed", "true");
       await expect(dialog.getByText(/productos? sin servir/)).toHaveCount(0);
       await expect(dialog.locator('dt:text-is("Total") ~ dd')).toHaveText(cop(expectedTotal));
-      await dialog.getByRole("button", { name: "Finalizar y generar cuenta" }).click();
+      await dialog.getByRole("button", { name: "Registrar pago y finalizar" }).click();
 
       await expect(waiter.getByText("Servicio finalizado. La mesa quedó libre.")).toBeVisible();
       const finalBill = waiter.getByRole("article", { name: "Cuenta, mesa 1" });
@@ -211,7 +212,7 @@ test("cliente y mesera: del QR a la cuenta final", async ({ browser }) => {
       await expect(finalBill.locator('dt:text-is("Efectivo") ~ dd')).toHaveText(cop(cashAmount));
       await expect(finalBill.locator('dt:text-is("Subtotal") ~ dd')).toHaveText(cop(subtotal));
       await expect(finalBill.locator('dt:text-is("Propina (10 %)") ~ dd')).toHaveText(cop(tip));
-      await expect(finalBill.locator('dt:text-is("Total a pagar") ~ dd')).toHaveText(cop(expectedTotal));
+      await expect(finalBill.locator('dt:text-is("Total registrado") ~ dd')).toHaveText(cop(expectedTotal));
       await expect(finalBill.getByText("Sin cebolla")).toBeVisible();
 
       await expect(customer.getByText("Servicio finalizado", { exact: true })).toBeVisible();

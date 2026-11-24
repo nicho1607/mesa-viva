@@ -28,6 +28,7 @@ export function FinalBill({ bill, tableNumber, zoneName, currency, pricesInclude
           <p className="mt-2 text-tinta-suave">
             {zoneName}. Cerrada a las <span className="tabular-nums">{formatClock(bill.closedAt)}</span> por {bill.closedByName}.
           </p>
+          <p className="mt-2 break-all text-sm">Comprobante: {bill.id}. Fecha: {new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", dateStyle: "short" }).format(new Date(bill.closedAt))}.</p>
         </header>
 
         <ul className="py-3">
@@ -45,6 +46,7 @@ export function FinalBill({ bill, tableNumber, zoneName, currency, pricesInclude
         </ul>
 
         <dl className="border-t-2 border-dashed border-tinta/30 pt-3 text-lg tabular-nums">
+          <Row label="Cuenta sin propina" value={money(bill.total - bill.tipAmount)} />
           <Row label="Subtotal" value={money(bill.subtotal)} />
           {pricesIncludeTax ? (
             <Row label={`IVA incluido (${percentLabel(bill.taxRate)} %)`} value={money(bill.taxAmount)} muted />
@@ -53,14 +55,26 @@ export function FinalBill({ bill, tableNumber, zoneName, currency, pricesInclude
           )}
           <Row label={`Propina (${percentLabel(bill.tipRate)} %)`} value={money(bill.tipAmount)} />
           {bill.paymentMethod ? <Row label="Método de pago" value={PAYMENT_METHOD_LABEL[bill.paymentMethod]} /> : null}
-          {bill.paymentMethod === "MIXED" && bill.transferAmount !== null && bill.cashAmount !== null ? (
+          {bill.transferAmount !== null && bill.cashAmount !== null ? (
             <>
               <Row label="Transferencia" value={money(bill.transferAmount)} />
               <Row label="Efectivo" value={money(bill.cashAmount)} />
             </>
           ) : null}
+          {bill.tipCashAmount !== null && bill.tipTransferAmount !== null ? (
+            <>
+              <Row label="Propina en efectivo" value={money(bill.tipCashAmount)} />
+              <Row label="Propina por transferencia" value={money(bill.tipTransferAmount)} />
+            </>
+          ) : bill.paymentMethod !== "CARD" ? <Row label="Propina por medio" value="Sin registro" /> : null}
+          {bill.cashReceivedAmount !== null && bill.cashAmount !== null ? (
+            <>
+              <Row label="Efectivo recibido" value={money(bill.cashReceivedAmount)} />
+              <Row label="Cambio" value={money(bill.cashReceivedAmount - bill.cashAmount)} />
+            </>
+          ) : null}
           <div className="mt-2 flex items-baseline justify-between gap-4 border-t-4 border-double border-tinta pt-2">
-            <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total a pagar</dt>
+            <dt className="font-display text-2xl font-semibold [font-stretch:87.5%]">Total registrado</dt>
             <dd className="font-display text-4xl leading-none font-semibold tracking-tight">{money(bill.total)}</dd>
           </div>
         </dl>

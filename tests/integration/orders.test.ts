@@ -206,21 +206,21 @@ describe("addItemsToOrder", () => {
   it("orden cerrada es inmutable y el siguiente envío abre una orden nueva", async () => {
     const table = await newTable();
     const r = await addItemsToOrder({ token: table.publicToken, items: [{ productId: f.burger.id, quantity: 1 }] });
-    await closeOrder(r.orderId, f.staffId);
+    await closeOrder(r.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     // Tras el cierre, el siguiente escaneo abre una orden nueva (no reabre la cerrada)
     const next = await addItemsToOrder({ token: table.publicToken, items: [{ productId: f.soda.id, quantity: 1 }] });
     expect(next.orderId).not.toBe(r.orderId);
     expect(next).toMatchObject({ isNew: true, round: 1 });
     // Las mutaciones directas sobre la orden cerrada se rechazan
     await expect(confirmRound(r.orderId, 1)).rejects.toBeInstanceOf(OrderClosedError);
-    await expect(closeOrder(r.orderId, f.staffId)).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(closeOrder(r.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() })).rejects.toBeInstanceOf(OrderClosedError);
   });
 
   it("si closeOrder gana el bloqueo, addItems concurrente ve CLOSED o abre una orden nueva, nunca escribe en la cerrada", async () => {
     const table = await newTable();
     const r = await addItemsToOrder({ token: table.publicToken, items: [{ productId: f.burger.id, quantity: 1 }] });
     const [closed, added] = await Promise.allSettled([
-      closeOrder(r.orderId, f.staffId),
+      closeOrder(r.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() }),
       addItemsToOrder({ token: table.publicToken, items: [{ productId: f.soda.id, quantity: 1 }] }),
     ]);
     expect(closed.status).toBe("fulfilled");
@@ -332,7 +332,7 @@ describe("acciones del mesero", () => {
     const retried = await cancelItem(soda.id);
     expect(retried).toMatchObject({ status: "CANCELLED", changed: false, version: c.version });
 
-    const { bill } = await closeOrder(r.orderId, f.staffId);
+    const { bill } = await closeOrder(r.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     expect(bill.subtotal).toBe(f.burger.price);
     // Mutaciones de ítems sobre orden cerrada
     const burger = await db.orderItem.findFirstOrThrow({ where: { orderId: r.orderId, productId: f.burger.id } });
@@ -354,7 +354,7 @@ describe("closeOrder", () => {
     await addItemsToOrder({ token: table.publicToken, items: [{ productId: f.burger.id, quantity: 1 }] });
     const before = await db.order.findUniqueOrThrow({ where: { id: r.orderId } });
 
-    const res = await closeOrder(r.orderId, f.staffId);
+    const res = await closeOrder(r.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     // subtotal = 3 × 25.000 + 2 × 6.000 = 87.000 COP (en centavos), IVA incluido 19 %, propina 10 %
     const subtotal = 3 * f.burger.price + 2 * f.soda.price;
     const taxAmount = subtotal - Math.round(subtotal / 1.19);
@@ -381,16 +381,16 @@ describe("closeOrder", () => {
     await db.setting.update({ where: { key: "tipRate" }, data: { value: "0.15" } });
     const t1 = await newTable();
     const r1 = await addItemsToOrder({ token: t1.publicToken, items: [{ productId: f.soda.id, quantity: 1 }] });
-    expect((await closeOrder(r1.orderId, f.staffId)).bill.tipAmount).toBe(Math.round(f.soda.price * 0.15));
+    expect((await closeOrder(r1.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() })).bill.tipAmount).toBe(Math.round(f.soda.price * 0.15));
 
     const t2 = await newTable();
     const r2 = await addItemsToOrder({ token: t2.publicToken, items: [{ productId: f.soda.id, quantity: 1 }] });
-    const { bill } = await closeOrder(r2.orderId, f.staffId, { tipRate: 0 });
+    const { bill } = await closeOrder(r2.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID(), tipRate: 0 });
     expect(bill).toMatchObject({ tipAmount: 0, total: f.soda.price });
-    await expect(closeOrder(r2.orderId, f.staffId, { tipRate: 2 })).rejects.toBeInstanceOf(RangeError);
+    await expect(closeOrder(r2.orderId, f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID(), tipRate: 2 })).rejects.toMatchObject({ name: "ZodError" });
   });
 
   it("orden inexistente → NotFoundError", async () => {
-    await expect(closeOrder(randomUUID(), f.staffId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(closeOrder(randomUUID(), f.staffId, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() })).rejects.toBeInstanceOf(NotFoundError);
   });
 });

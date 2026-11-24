@@ -38,6 +38,12 @@ function describeIssue(issue: ZodError["issues"][number]): string {
   if (path[0] === "reason") return "el motivo no es válido";
   if (path[0] === "paymentMethod") return "elige un método de pago válido";
   if (path[0] === "tipRate") return "la propina debe estar entre 0 % y 100 %";
+  if (path[0] === "closeOperationId") return "la operación de cierre no es válida";
+  const paymentFields: Record<string, string> = {
+    cashAmount: "efectivo aplicado", transferAmount: "transferencia", tipCashAmount: "propina en efectivo",
+    tipTransferAmount: "propina por transferencia", cashReceivedAmount: "efectivo recibido",
+  };
+  if (last && paymentFields[last]) return `${paymentFields[last]}: escribe un importe válido, no negativo y dentro del máximo permitido`;
   return "hay datos no válidos";
 }
 

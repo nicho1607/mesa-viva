@@ -61,6 +61,7 @@ it("suma los cobros por medio y detecta importes sin atribuir en el día de Bogo
       transfer: 5_500_000,
       unattributed: 1_300_000,
       unattributedCount: 2,
+      tipCash: 0, tipTransfer: 0, unknownTipCount: 5,
     });
   } finally {
     await db.bill.deleteMany({ where: { closedById: userId } });

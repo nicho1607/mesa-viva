@@ -24,7 +24,7 @@ import type { BillSnapshotLine } from "@/lib/domain/order-rules";
 import { decideTableAction, type TableAction } from "@/lib/domain/permissions";
 import { CLOSED_BILL_WINDOW_MS } from "@/lib/domain/queries";
 import { REASON_FROM_DB, type CallWaiterReason } from "@/lib/domain/tables";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
+import { closePaymentInput, type PaymentMethod } from "@/lib/payment-methods";
 
 export type { TableAction } from "@/lib/domain/permissions";
 
@@ -107,6 +107,10 @@ export type StaffItemView = {
 export type StaffRoundView = { round: number; createdAt: string; items: StaffItemView[] };
 
 export type ClosedBillView = {
+  id: string;
+  tipCashAmount: number | null;
+  tipTransferAmount: number | null;
+  cashReceivedAmount: number | null;
   orderId: string;
   closedAt: string; // ISO
   closedByName: string;
@@ -238,6 +242,10 @@ export async function getTableDetailForStaff(
     if (last?.bill && last.closedAt) {
       const b = last.bill;
       closedBill = {
+        id: b.id,
+        tipCashAmount: b.tipCashAmount,
+        tipTransferAmount: b.tipTransferAmount,
+        cashReceivedAmount: b.cashReceivedAmount,
         orderId: last.id,
         closedAt: last.closedAt.toISOString(),
         closedByName: b.closedBy.name,
@@ -285,19 +293,7 @@ const roundInput = z.object({ orderId: z.uuid(), round: z.number().int().min(1).
 const itemStatusInput = z.object({ itemId: z.uuid(), status: z.enum(["IN_PREPARATION", "SERVED", "CANCELLED"]) });
 const staffAddInput = z.object({ tableId: z.uuid(), items: orderItemsInput, operationId: z.uuid().optional() });
 /** Propina como fracción (0.1 = 10 %), máx. 100 %, redondeada a 4 decimales (Decimal(5,4)). */
-const closeInput = z.object({
-  orderId: z.uuid(),
-  paymentMethod: z.enum(PAYMENT_METHODS),
-  mixedPayment: z.object({
-    transferAmount: z.number().int().min(0).max(2_147_483_647),
-    cashAmount: z.number().int().min(0).max(2_147_483_647),
-  }).optional(),
-  tipRate: z
-    .number()
-    .min(0)
-    .max(1)
-    .transform((n) => Math.round(n * 10_000) / 10_000),
-});
+const closeInput = closePaymentInput.extend({ orderId: z.uuid(), tipRate: closePaymentInput.shape.tipRate.unwrap() });
 
 export async function staffConfirmRound(user: StaffActor, raw: unknown): Promise<ConfirmRoundResult> {
   const { orderId, round } = roundInput.parse(raw);
@@ -330,7 +326,6 @@ export async function staffAddItems(user: StaffActor, raw: unknown): Promise<Add
 }
 
 export async function staffCloseService(user: StaffActor, raw: unknown): Promise<CloseOrderResult> {
-  const { orderId, tipRate, paymentMethod, mixedPayment } = closeInput.parse(raw);
-  await assertCanActOnOrder(user, orderId, "close");
-  return closeOrder(orderId, user.id, { tipRate, paymentMethod, mixedPayment });
+  const { orderId, ...payment } = closeInput.parse(raw);
+  return closeOrder(orderId, user.id, payment);
 }

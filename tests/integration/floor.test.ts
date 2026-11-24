@@ -50,7 +50,7 @@ it("una mesa reasignada sigue visible y envía pedidos y llamadas a ambos respon
     expect(await acknowledgeTable({ tableId: f.t4.id }, { id: f.beto, role: "WAITER" })).toMatchObject({
       waiterId: f.ana, assignedWaiterId: f.beto,
     });
-    await closeOrder(order.orderId, f.admin);
+    await closeOrder(order.orderId, f.admin, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     expect(mine(await getFloorForStaff({ id: f.ana, role: "WAITER" })).map((t) => t.id)).not.toContain(f.t4.id);
   } finally {
     unsubscribe.forEach((fn) => fn());
@@ -197,7 +197,7 @@ describe("motivo de la llamada + acknowledgeTable", () => {
   it("closeOrder borra el motivo y deja la mesa AVAILABLE", async () => {
     await requestWaiter({ token: f.t1.token, reason: "bill", paymentMethod: "CARD" });
     const open = await db.order.findFirstOrThrow({ where: { tableId: f.t1.id, status: "OPEN" } });
-    await closeOrder(open.id, f.ana);
+    await closeOrder(open.id, f.ana, { paymentMethod: "CARD", closeOperationId: crypto.randomUUID() });
     expect(await db.table.findUniqueOrThrow({ where: { id: f.t1.id } })).toMatchObject({
       status: "AVAILABLE",
       attentionReason: null,
